@@ -153,3 +153,14 @@ python steamnext.py --browser
   source.
 - Set `STEAMNEXT_STEAM_ROOT` as an environment variable to avoid passing `--steam-root`
   every time.
+
+
+## DISCLAIMER
+
+SteamNext was developed to fill a gap in the official Steam client (the absence of filters by average time to play or complete games).
+
+It has been developed with Claude and GitHub Copilot to save time, and has been tested on Windows 11.
+
+This has no affiliation to Steam or Valve, and is in no way an official product.
+
+It is subject to break any time Valve makes a significant change to the Steam Desktop client.
