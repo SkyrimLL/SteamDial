@@ -83,6 +83,21 @@ STEAM_API_KEY=your_key_here
 The fetched catalog is cached in `data/owned_games_cache.json` (safe to delete; it's just a local
 mirror of the API response) and refreshed in the background on every rescan.
 
+## Styling
+
+The UI's CSS is a pre-built Tailwind bundle ([assets/app.css](assets/app.css)) checked into the
+repo — the app never loads anything from a CDN, so it works fully offline. If you change the
+classes used in [templates/index.html](templates/index.html), rebuild it with the official
+[Tailwind standalone CLI](https://tailwindcss.com/blog/standalone-cli) (no Node.js required):
+
+```powershell
+# One-time download (kept out of git; see tools/ in .gitignore)
+Invoke-WebRequest -Uri "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-windows-x64.exe" -OutFile tools\tailwindcss.exe
+
+# Rebuild assets/app.css from assets/tailwind.src.css
+.\tools\tailwindcss.exe -i assets\tailwind.src.css -o assets\app.css --minify
+```
+
 ## Usage
 
 ```powershell

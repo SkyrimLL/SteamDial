@@ -53,7 +53,12 @@ def create_app(
     owned_games_cache: OwnedGamesCache,
     allow_fetch: bool = True,
 ) -> Flask:
-    app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
+    app = Flask(
+        __name__,
+        template_folder=str(BASE_DIR / "templates"),
+        static_folder=str(BASE_DIR / "assets"),
+        static_url_path="",
+    )
 
     @app.get("/")
     def index():
@@ -191,12 +196,17 @@ def main() -> None:
         _run_in_window(app, args.host, args.port)
 
 
-DEFAULT_ICON = BASE_DIR / "assets" / "app_icon.ico"
+DEFAULT_ICON = BASE_DIR / "assets" / "app-icon.ico"
 
 
 def _run_in_window(app: Flask, host: str, port: int) -> None:
     """Serves Flask on a background thread and shows it in a native OS window (no browser tab/chrome)."""
     import webview
+
+    if os.name == "nt":
+        import ctypes
+        # Gives the taskbar a distinct app identity, so it stops grouping/iconing this window under python.exe.
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("SteamDial.App")
 
     server = threading.Thread(
         target=app.run, kwargs={"host": host, "port": port, "debug": False, "use_reloader": False}, daemon=True,
@@ -248,6 +258,12 @@ def _set_window_icon(window_title: str, icon_path: Path) -> None:
     WM_SETICON, ICON_SMALL, ICON_BIG = 0x0080, 0, 1
     user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon)
     user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon)
+    # The taskbar button reads the *class* icon, not just WM_SETICON, so set both.
+    GCLP_HICON, GCLP_HICONSM = -14, -34
+    user32.SetClassLongPtrW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
+    user32.SetClassLongPtrW.restype = ctypes.c_void_p
+    user32.SetClassLongPtrW(hwnd, GCLP_HICON, hicon)
+    user32.SetClassLongPtrW(hwnd, GCLP_HICONSM, hicon)
 
 
 

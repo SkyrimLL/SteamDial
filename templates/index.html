@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Steam Dial</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/app.css">
   <style>
     body { background: radial-gradient(ellipse at top, #1b2838 0%, #0e141b 60%); }
     .card-img { aspect-ratio: 460 / 215; }
@@ -17,14 +17,25 @@
     ::-webkit-scrollbar-thumb { background-color: #334155; border-radius: 8px; border: 3px solid #0e141b; }
     ::-webkit-scrollbar-thumb:hover { background-color: #475569; }
   </style>
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="manifest" href="/site.webmanifest">
+
 </head>
 <body class="min-h-full text-slate-200 antialiased">
   <header class="sticky top-0 z-20 backdrop-blur bg-slate-950/70 border-b border-white/5">
     <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-4">
       <div class="flex items-center justify-between gap-4">
-        <h1 class="text-2xl font-bold tracking-tight">
-          <span class="text-sky-400">Steam</span> Dial
-        </h1>
+        <div class="flex items-center gap-3">
+          <img src="/android-chrome-192x192.png" alt="Steam Dial logo" class="w-9 h-9 rounded-xl bg-white p-1 border border-white/10">
+          <h1 class="text-2xl font-bold tracking-tight">
+            <span class="text-sky-400">Steam</span> Dial
+          </h1>
+        </div>
         <div class="flex items-center gap-3 text-sm">
           <span id="counts" class="text-slate-400"></span>
           <button id="rescan" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Rescan</button>
