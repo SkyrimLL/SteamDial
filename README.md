@@ -1,4 +1,4 @@
-# SteamNext
+# Steam Dial
 
 A local, read-only Steam library browser that recommends what to play next based on how
 much time you have, using "time to beat" estimates (e.g. HowLongToBeat).
@@ -54,10 +54,10 @@ pip install -r requirements.txt
 
 ### Optional: SteamGridDB fallback
 
-For games Steam's own CDN has no header/capsule art for, SteamNext can fall back to
+For games Steam's own CDN has no header/capsule art for, Steam Dial can fall back to
 [SteamGridDB](https://www.steamgriddb.com/). Get a free API key from
 [your SteamGridDB preferences](https://www.steamgriddb.com/profile/preferences/api) and put
-it in a `.env` file next to `steamnext.py` (loaded automatically at startup):
+it in a `.env` file next to `steamdial.py` (loaded automatically at startup):
 
 ```
 STEAMGRIDDB_API_KEY=your_key_here
@@ -68,7 +68,7 @@ works.
 
 ### Optional: Steam Web API (owned-games catalog + real playtime)
 
-Without a Steam Web API key, SteamNext falls back to inferring ownership from leftover local
+Without a Steam Web API key, Steam Dial falls back to inferring ownership from leftover local
 cache files, and only ever shows "time to beat" estimates. With a key, it instead fetches the
 account's real owned-games list and actual playtime via `IPlayerService/GetOwnedGames`, keyed
 to whichever local Steam profile under `userdata` was used most recently.
@@ -86,17 +86,17 @@ mirror of the API response) and refreshed in the background on every rescan.
 ## Usage
 
 ```powershell
-python steamnext.py
+python steamdial.py
 ```
 
-By default this opens SteamNext in its own window, scans `F:\Steam` for games, and
+By default this opens Steam Dial in its own window, scans `F:\Steam` for games, and
 fetches missing playtime estimates online, caching results in `data/game_cache.json`.
 
 ### Options
 
 | Flag | Description |
 | --- | --- |
-| `--steam-root PATH` | Steam install folder to scan (default `F:\Steam`, or `STEAMNEXT_STEAM_ROOT` env var) |
+| `--steam-root PATH` | Steam install folder to scan (default `F:\Steam`, or `STEAMDIAL_STEAM_ROOT` env var) |
 | `--cache PATH` | Path to the playtime cache JSON (default `game_cache.json` in the `data/` folder) |
 | `--thumbnail-cache PATH` | Folder for downloaded thumbnails (default `thumbnails` next to the script) |
 | `--owned-games-cache PATH` | Path to the owned-games catalog cache (default `owned_games_cache.json` in the `data/` folder) |
@@ -113,17 +113,17 @@ fetches missing playtime estimates online, caching results in `data/game_cache.j
 
 ```powershell
 # Point at a different Steam library and browse offline
-python steamnext.py --steam-root "D:\Games\Steam" --no-fetch
+python steamdial.py --steam-root "D:\Games\Steam" --no-fetch
 
 # Use a classic browser tab instead of the native window
-python steamnext.py --browser
+python steamdial.py --browser
 ```
 
 ## How it works
 
 | Module | Responsibility |
 | --- | --- |
-| [steamnext.py](steamnext.py) | CLI entry point, Flask routes, and window/browser bootstrap |
+| [steamdial.py](steamdial.py) | CLI entry point, Flask routes, and window/browser bootstrap |
 | [steam_parser.py](steam_parser.py) | Read-only scanner that discovers games from Steam's library/appcache files, using the owned-games catalog (when available) for not-installed games |
 | [appinfo_reader.py](appinfo_reader.py) | Binary parser for Steam's `appcache/appinfo.vdf` (formats v27-v29) |
 | [steam_web_api.py](steam_web_api.py) | Client for the official Steam Web API (`GetOwnedGames`) — the authoritative owned-games/playtime source |
@@ -161,13 +161,13 @@ python steamnext.py --browser
 - `thumbnails/overrides/` is for you: drop an image named `<AppID>.jpg` (or `.jpeg`/`.png`/
   `.webp`) there to replace a broken or missing thumbnail; it always wins over every other
   source.
-- Set `STEAMNEXT_STEAM_ROOT` as an environment variable to avoid passing `--steam-root`
+- Set `STEAMDIAL_STEAM_ROOT` as an environment variable to avoid passing `--steam-root`
   every time.
 
 
 ## DISCLAIMER
 
-SteamNext was developed to fill a gap in the official Steam client (the absence of filters by average time to play or complete games).
+Steam Dial was developed to fill a gap in the official Steam client (the absence of filters by average time to play or complete games).
 
 It has been developed with Claude and GitHub Copilot to save time, and has been tested on Windows 11.
 

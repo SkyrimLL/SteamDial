@@ -21,7 +21,7 @@ _OVERRIDE_SUBDIR = "overrides"
 _OVERRIDE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 _OVERRIDE_README = """Drop an image here named <AppID>.jpg (or .jpeg/.png/.webp), e.g. 440.jpg,
 to replace the thumbnail for that game. Files here always take priority over Steam's own
-cached artwork and anything SteamNext downloaded automatically.
+cached artwork and anything Steam Dial downloaded automatically.
 """
 _OVERRIDE_MAX_BYTES = 8 * 1024 * 1024
 _JPEG_MAGIC = b"\xff\xd8\xff"

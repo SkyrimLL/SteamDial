@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SteamNext</title>
+  <title>Steam Dial</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { background: radial-gradient(ellipse at top, #1b2838 0%, #0e141b 60%); }
@@ -23,7 +23,7 @@
     <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-4">
       <div class="flex items-center justify-between gap-4">
         <h1 class="text-2xl font-bold tracking-tight">
-          <span class="text-sky-400">Steam</span>Next
+          <span class="text-sky-400">Steam</span> Dial
         </h1>
         <div class="flex items-center gap-3 text-sm">
           <span id="counts" class="text-slate-400"></span>
@@ -475,7 +475,7 @@
       render();
       schedulePoll(data.status.running);
     } catch (e) {
-      $('counts').textContent = 'Could not reach the SteamNext server.';
+      $('counts').textContent = 'Could not reach the Steam Dial server.';
     }
   }
 
