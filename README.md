@@ -14,12 +14,16 @@ a regular browser tab, and never writes to your Steam installation.
   (`IPlayerService/GetOwnedGames`) when a `STEAM_API_KEY` is configured — the authoritative
   source for what the account owns, replacing the old guesswork of inferring ownership from
   leftover local cache files. The result is cached in
-  [owned_games_cache.json](owned_games_cache.json) so the catalog is available offline too.
+  [owned_games_cache.json](data/owned_games_cache.json) so the catalog is available offline too.
 - Shows each game's real Steam playtime (not just the "time to beat" estimate) once the Web
   API is configured, and logs games missing a completionist estimate to
-  [missing_completionist.json](missing_completionist.json) so you can spot gaps in the cache.
+  [missing_completionist.json](data/missing_completionist.json) so you can spot gaps in the cache.
+- Lets you patch those gaps yourself in
+  [missing_completionist_override.json](data/missing_completionist_override.json): fill in
+  `completionist_hours` for a game and it's used wherever the estimate is missing (including
+  recommendations), and it drops out of `missing_completionist.json`.
 - Enriches games with playtime estimates (main/extra/completionist hours) from online
-  providers, cached locally in [game_cache.json](game_cache.json) so lookups aren't repeated.
+  providers, cached locally in [game_cache.json](data/game_cache.json) so lookups aren't repeated.
 - Recommends games to play based on a time budget, via quick presets (Quick Session,
   Weekend Game, Epic Long Haul) or natural language queries like "under 4 hours" or
   "a weekend game".
@@ -76,7 +80,7 @@ add it to `.env`:
 STEAM_API_KEY=your_key_here
 ```
 
-The fetched catalog is cached in `owned_games_cache.json` (safe to delete; it's just a local
+The fetched catalog is cached in `data/owned_games_cache.json` (safe to delete; it's just a local
 mirror of the API response) and refreshed in the background on every rescan.
 
 ## Usage
@@ -86,17 +90,18 @@ python steamnext.py
 ```
 
 By default this opens SteamNext in its own window, scans `F:\Steam` for games, and
-fetches missing playtime estimates online, caching results in `game_cache.json`.
+fetches missing playtime estimates online, caching results in `data/game_cache.json`.
 
 ### Options
 
 | Flag | Description |
 | --- | --- |
 | `--steam-root PATH` | Steam install folder to scan (default `F:\Steam`, or `STEAMNEXT_STEAM_ROOT` env var) |
-| `--cache PATH` | Path to the playtime cache JSON (default `game_cache.json` next to the script) |
+| `--cache PATH` | Path to the playtime cache JSON (default `game_cache.json` in the `data/` folder) |
 | `--thumbnail-cache PATH` | Folder for downloaded thumbnails (default `thumbnails` next to the script) |
-| `--owned-games-cache PATH` | Path to the owned-games catalog cache (default `owned_games_cache.json` next to the script) |
-| `--missing-playtime-log PATH` | Path to the missing-completionist-estimate log (default `missing_completionist.json` next to the script) |
+| `--owned-games-cache PATH` | Path to the owned-games catalog cache (default `owned_games_cache.json` in the `data/` folder) |
+| `--missing-playtime-log PATH` | Path to the missing-completionist-estimate log (default `missing_completionist.json` in the `data/` folder) |
+| `--completionist-overrides PATH` | Path to the hand-filled completionist-hours overrides (default `missing_completionist_override.json` in the `data/` folder) |
 | `--steamgriddb-api-key KEY` | SteamGridDB API key (default from `.env` / `STEAMGRIDDB_API_KEY` env var) |
 | `--steam-api-key KEY` | Steam Web API key, enables the owned-games catalog and real playtime (default from `.env` / `STEAM_API_KEY` env var) |
 | `--host HOST` | Host to bind the local server to (default `127.0.0.1`) |
@@ -122,12 +127,13 @@ python steamnext.py --browser
 | [steam_parser.py](steam_parser.py) | Read-only scanner that discovers games from Steam's library/appcache files, using the owned-games catalog (when available) for not-installed games |
 | [appinfo_reader.py](appinfo_reader.py) | Binary parser for Steam's `appcache/appinfo.vdf` (formats v27-v29) |
 | [steam_web_api.py](steam_web_api.py) | Client for the official Steam Web API (`GetOwnedGames`) — the authoritative owned-games/playtime source |
-| [owned_games_cache.py](owned_games_cache.py) | Persists the Steam Web API's owned-games catalog to [owned_games_cache.json](owned_games_cache.json), loaded offline at startup and refreshed on rescan |
+| [owned_games_cache.py](owned_games_cache.py) | Persists the Steam Web API's owned-games catalog to [owned_games_cache.json](data/owned_games_cache.json), loaded offline at startup and refreshed on rescan |
 | [actual_playtime_service.py](actual_playtime_service.py) | Read-only per-game view over the owned-games catalog (real playtime, icon URL) |
 | [library_service.py](library_service.py) | Combines scanned games with cached playtime data and real playtime for the API/UI |
 | [cache_manager.py](cache_manager.py) | Thread-safe JSON cache for playtime lookups, stored in the project folder |
 | [enrichment.py](enrichment.py) | Background worker that fills the cache with playtime estimates |
-| [missing_playtime_log.py](missing_playtime_log.py) | Writes [missing_completionist.json](missing_completionist.json), listing games with no completionist playtime estimate |
+| [missing_playtime_log.py](missing_playtime_log.py) | Writes [missing_completionist.json](data/missing_completionist.json), listing games with no completionist playtime estimate |
+| [completionist_overrides.py](completionist_overrides.py) | Loads [missing_completionist_override.json](data/missing_completionist_override.json), a hand-filled-in copy of the missing-completionist report, to patch cache gaps |
 | [playtime_providers.py](playtime_providers.py) | Playtime estimate sources (e.g. HowLongToBeat) behind a common interface |
 | [recommender.py](recommender.py) | Maps time budgets (presets or natural language) to game recommendations |
 | [thumbnail_cache.py](thumbnail_cache.py) | On-disk thumbnail cache (`thumbnails/`) plus the `overrides/` manual-fix folder |
@@ -138,13 +144,17 @@ python steamnext.py --browser
 
 ## Notes
 
-- `game_cache.json` is local data and safe to delete to force re-fetching playtime
+- `data/game_cache.json` is local data and safe to delete to force re-fetching playtime
   estimates; it is never written to the Steam installation.
-- `owned_games_cache.json` is a local mirror of the Steam Web API's owned-games catalog,
+- `data/owned_games_cache.json` is a local mirror of the Steam Web API's owned-games catalog,
   safe to delete (it's rebuilt on the next rescan if a `STEAM_API_KEY` is configured).
-- `missing_completionist.json` is a generated report of games lacking a completionist
+- `data/missing_completionist.json` is a generated report of games lacking a completionist
   playtime estimate, refreshed automatically after every rescan/enrichment run; safe to
   delete.
+- `data/missing_completionist_override.json` is for you: copy an entry from
+  `missing_completionist.json`, add a `completionist_hours` value you looked up manually,
+  and it's used in place of the missing estimate everywhere (UI, recommendations) and the
+  game is removed from `missing_completionist.json` on the next refresh.
 - `thumbnails/` holds downloaded artwork plus a small `_missing.json` ledger of appids
   confirmed to have no artwork anywhere (retried automatically after 7 days). Both are
   local data, safe to delete, and never written to the Steam installation.

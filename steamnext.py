@@ -15,6 +15,7 @@ from flask import Flask, abort, jsonify, render_template, request, send_file
 
 from cache_manager import GameCache
 from actual_playtime_service import ActualPlaytimeService
+from completionist_overrides import CompletionistOverrides
 from enrichment import PlaytimeEnrichmentService
 from library_service import LibraryService
 from missing_playtime_log import MissingPlaytimeLogger
@@ -28,12 +29,14 @@ from thumbnail_providers import default_provider as default_thumbnail_provider
 from thumbnail_service import ThumbnailService
 
 BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 load_dotenv(BASE_DIR / ".env")
 DEFAULT_STEAM_ROOT = os.environ.get("STEAMNEXT_STEAM_ROOT", r"F:\Steam")
-DEFAULT_CACHE = BASE_DIR / "game_cache.json"
+DEFAULT_CACHE = DATA_DIR / "game_cache.json"
 DEFAULT_THUMBNAIL_DIR = BASE_DIR / "thumbnails"
-DEFAULT_MISSING_PLAYTIME_LOG = BASE_DIR / "missing_completionist.json"
-DEFAULT_OWNED_GAMES_CACHE = BASE_DIR / "owned_games_cache.json"
+DEFAULT_MISSING_PLAYTIME_LOG = DATA_DIR / "missing_completionist.json"
+DEFAULT_COMPLETIONIST_OVERRIDES = DATA_DIR / "missing_completionist_override.json"
+DEFAULT_OWNED_GAMES_CACHE = DATA_DIR / "owned_games_cache.json"
 
 log = logging.getLogger("steamnext")
 
@@ -58,7 +61,10 @@ def create_app(
 
     @app.get("/api/games")
     def api_games():
-        return jsonify(games=library.game_dicts(), status=enrichment.status())
+        games = library.game_dicts()
+        for g in games:
+            g["has_thumbnail"] = thumbnails.local_only(g["appid"]) is not None
+        return jsonify(games=games, status=enrichment.status())
 
     @app.get("/api/status")
     def api_status():
@@ -127,6 +133,8 @@ def main() -> None:
     cli.add_argument("--thumbnail-cache", default=str(DEFAULT_THUMBNAIL_DIR), help="Folder for downloaded thumbnails")
     cli.add_argument("--missing-playtime-log", default=str(DEFAULT_MISSING_PLAYTIME_LOG),
                       help="JSON file listing games with no completionist playtime estimate")
+    cli.add_argument("--completionist-overrides", default=str(DEFAULT_COMPLETIONIST_OVERRIDES),
+                      help="JSON file with manually supplied completionist_hours, used to patch cache gaps")
     cli.add_argument("--owned-games-cache", default=str(DEFAULT_OWNED_GAMES_CACHE),
                       help="JSON file caching the account's owned-games list from the Steam Web API")
     cli.add_argument("--steamgriddb-api-key", default=os.environ.get("STEAMGRIDDB_API_KEY"),
@@ -153,9 +161,11 @@ def main() -> None:
     owned_games_cache = OwnedGamesCache(Path(args.owned_games_cache), web_api_client)
     actual_playtime = ActualPlaytimeService(owned_games_cache)
 
+    completionist_overrides = CompletionistOverrides(Path(args.completionist_overrides))
+
     scanner = SteamLibraryScanner(steam_root, owned_games=owned_games_cache.snapshot)
-    library = LibraryService(scanner, cache, actual_playtime)
-    missing_playtime_log = MissingPlaytimeLogger(cache, Path(args.missing_playtime_log))
+    library = LibraryService(scanner, cache, actual_playtime, completionist_overrides)
+    missing_playtime_log = MissingPlaytimeLogger(cache, Path(args.missing_playtime_log), completionist_overrides)
     enrichment = PlaytimeEnrichmentService(
         cache, default_provider(), on_run_complete=lambda: missing_playtime_log.refresh_async(library.games),
     )

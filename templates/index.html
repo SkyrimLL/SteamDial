@@ -48,6 +48,7 @@
           <option value="installed">Installed</option>
           <option value="uninstalled">Not installed</option>
           <option value="no-playtime">No playtime data</option>
+          <option value="no-thumbnail">No thumbnail</option>
         </select>
         <select id="sort" class="px-3 py-2 rounded-lg bg-slate-900 border border-white/10">
           <option value="name">Sort: Name</option>
@@ -427,6 +428,7 @@
       case 'installed': return g.installed;
       case 'uninstalled': return !g.installed;
       case 'no-playtime': return g[metric()] == null;
+      case 'no-thumbnail': return !g.has_thumbnail;
       default: return true;
     }
   }
