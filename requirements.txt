@@ -1,0 +1,6 @@
+flask>=3.0
+requests>=2.31
+vdf>=3.4
+howlongtobeatpy>=1.0.24
+pywebview>=5.0
+python-dotenv>=1.0

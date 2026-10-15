@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SteamNext</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: radial-gradient(ellipse at top, #1b2838 0%, #0e141b 60%); }
+    .card-img { aspect-ratio: 460 / 215; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .preset-active { background-color: rgba(2, 132, 199, 0.35); border-color: #38bdf8; box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.5); }
+
+    html { color-scheme: dark; scrollbar-color: #334155 #0e141b; scrollbar-width: thin; }
+    ::-webkit-scrollbar { width: 12px; height: 12px; }
+    ::-webkit-scrollbar-track { background: #0e141b; }
+    ::-webkit-scrollbar-thumb { background-color: #334155; border-radius: 8px; border: 3px solid #0e141b; }
+    ::-webkit-scrollbar-thumb:hover { background-color: #475569; }
+  </style>
+</head>
+<body class="min-h-full text-slate-200 antialiased">
+  <header class="sticky top-0 z-20 backdrop-blur bg-slate-950/70 border-b border-white/5">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-4">
+      <div class="flex items-center justify-between gap-4">
+        <h1 class="text-2xl font-bold tracking-tight">
+          <span class="text-sky-400">Steam</span>Next
+        </h1>
+        <div class="flex items-center gap-3 text-sm">
+          <span id="counts" class="text-slate-400"></span>
+          <button id="rescan" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Rescan</button>
+        </div>
+      </div>
+
+      <div id="progress" class="hidden">
+        <div class="flex justify-between text-xs text-slate-400 mb-1">
+          <span id="progress-label">Fetching playtimes…</span><span id="progress-count"></span>
+        </div>
+        <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
+          <div id="progress-bar" class="h-full bg-sky-500 transition-all" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div class="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+        <input id="search" type="search" placeholder="Search your library…"
+               class="w-full px-4 py-2 rounded-lg bg-slate-900 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500">
+        <select id="status" class="px-3 py-2 rounded-lg bg-slate-900 border border-white/10">
+          <option value="all">All games</option>
+          <option value="installed">Installed</option>
+          <option value="uninstalled">Not installed</option>
+          <option value="no-playtime">No playtime data</option>
+        </select>
+        <select id="sort" class="px-3 py-2 rounded-lg bg-slate-900 border border-white/10">
+          <option value="name">Sort: Name</option>
+          <option value="time-asc" selected>Sort: Shortest first</option>
+          <option value="time-desc">Sort: Longest first</option>
+          <option value="time-left-asc">Sort: Time left (shortest first)</option>
+          <option value="installed">Sort: Installed first</option>
+        </select>
+      </div>
+      <div class="flex items-center gap-2 text-sm">
+        <label for="metric" class="text-slate-400">Playtime basis:</label>
+        <select id="metric" class="px-3 py-1.5 rounded-lg bg-slate-900 border border-white/10">
+          <option value="main_hours">Main Story</option>
+          <option value="extra_hours">Main + Extra</option>
+          <option value="completionist_hours" selected>Completionist</option>
+        </select>
+        <label class="flex items-center gap-2 ml-2 text-slate-400 cursor-pointer select-none">
+          <input id="include-hidden" type="checkbox" class="rounded border-white/20 bg-slate-900">
+          Include hidden games
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <section class="mb-8 rounded-2xl bg-gradient-to-br from-sky-900/40 to-indigo-900/30 border border-white/10 p-5">
+      <h2 class="text-lg font-semibold mb-1">How much time do you have?</h2>
+      <p class="text-sm text-slate-400 mb-4">Pick a preset or describe it, e.g. “I only have 3 hours tonight” or “between 10 and 15 hours”.</p>
+      <div class="flex flex-wrap gap-3 mb-4">
+        {% for p in presets %}
+        <button class="preset group text-left px-4 py-3 rounded-xl bg-slate-900/70 hover:bg-sky-600/30 border border-white/10 hover:border-sky-400/50 transition"
+                data-preset="{{ p.key }}">
+          <div class="font-semibold">{{ p.title }}</div>
+          <div class="text-xs text-slate-400 group-hover:text-slate-300">{{ p.description }} · {{ p.range.label }}</div>
+        </button>
+        {% endfor %}
+      </div>
+      <form id="nl-form" class="flex gap-2">
+        <input id="nl" type="text" maxlength="200" placeholder="Describe your time budget…"
+               class="flex-1 px-4 py-2 rounded-lg bg-slate-900 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500">
+        <button class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 font-medium">Recommend</button>
+      </form>
+      <div id="rec-banner" class="hidden mt-4 flex items-center justify-between gap-3 text-sm px-4 py-2 rounded-lg bg-sky-500/10 border border-sky-500/30">
+        <span id="rec-text"></span>
+        <button id="rec-clear" class="text-sky-300 hover:text-white">Show full library ✕</button>
+      </div>
+      <div id="rec-error" class="hidden mt-4 text-sm text-rose-300"></div>
+    </section>
+
+    <div id="grid" class="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></div>
+    <p id="empty" class="hidden text-center text-slate-500 py-16">No games match your filters.</p>
+  </main>
+
+  <template id="card-tpl">
+    <article class="group rounded-xl overflow-hidden bg-slate-900/80 border border-white/5 hover:border-sky-500/40 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-sky-900/20 transition">
+      <div class="relative">
+        <img class="card-img w-full object-cover bg-slate-800" loading="lazy" alt="">
+        <div class="placeholder hidden card-img w-full bg-gradient-to-br from-slate-800 to-slate-700"></div>
+        <span class="badge absolute top-2 right-2 text-[11px] font-semibold px-2 py-0.5 rounded-full"></span>
+        <button type="button" class="thumb-edit absolute top-2 left-2 z-10 p-1.5 rounded-full bg-black/60 hover:bg-sky-600/90 text-slate-200 opacity-0 group-hover:opacity-100 focus:opacity-100 transition" title="Change thumbnail" aria-label="Change thumbnail">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+            <path d="M3.5 14.6V17h2.4l7.1-7.1-2.4-2.4-7.1 7.1z"/>
+            <path d="M14.1 4.9a1.2 1.2 0 0 0-1.7 0l-1.2 1.2 2.4 2.4 1.2-1.2a1.2 1.2 0 0 0 0-1.7l-.7-.7z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="p-3">
+        <h3 class="title font-semibold leading-tight line-clamp-2 min-h-[2.5rem]"></h3>
+        <div class="mt-2 flex items-center justify-between text-sm">
+          <span class="hours text-slate-300"></span>
+          <span class="source text-[11px] text-slate-500"></span>
+        </div>
+        <div class="progress-wrap hidden mt-2">
+          <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
+            <div class="progress-bar h-full bg-emerald-500" style="width:0%"></div>
+          </div>
+          <div class="progress-label mt-1 text-[11px] text-slate-500"></div>
+        </div>
+        <div class="no-progress hidden mt-2 flex items-center gap-1 text-[11px] text-slate-600 cursor-help"
+             title="Not in your Steam account's owned-games list (e.g. a demo, wishlist item, or refund), so real playtime can't be fetched.">
+          <div class="h-1.5 flex-1 rounded-full overflow-hidden bg-white/5" style="background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.08) 0 4px, transparent 4px 8px);"></div>
+          <span class="shrink-0">No Steam playtime data</span>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <div id="thumb-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
+    <div class="w-full max-w-lg rounded-xl bg-slate-900 border border-white/10 p-5" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-3 gap-3">
+        <h3 class="font-semibold truncate">Change thumbnail — <span id="thumb-modal-name"></span></h3>
+        <button id="thumb-modal-close" class="text-slate-400 hover:text-white text-xl leading-none shrink-0">&times;</button>
+      </div>
+      <input id="thumb-file" type="file" accept="image/*"
+             class="block w-full text-sm text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-sky-600 file:text-white hover:file:bg-sky-500 file:cursor-pointer cursor-pointer">
+      <p class="text-xs text-slate-500 mt-1.5">Tip: you can also paste an image from your clipboard (Ctrl+V) anywhere in this dialog.</p>
+      <div id="thumb-crop-wrap" class="hidden mt-4">
+        <canvas id="thumb-canvas" width="460" height="215" class="w-full rounded-lg bg-slate-800 cursor-grab active:cursor-grabbing touch-none"></canvas>
+        <div class="flex items-center gap-2 mt-3 text-sm text-slate-400">
+          <span>Zoom</span>
+          <input id="thumb-zoom" type="range" min="0" max="100" value="0" class="flex-1">
+        </div>
+        <p class="text-xs text-slate-500 mt-1">Drag the image to reposition. The crop matches the card's thumbnail shape.</p>
+      </div>
+      <p id="thumb-error" class="hidden mt-3 text-sm text-rose-300"></p>
+      <div class="flex justify-end gap-2 mt-5">
+        <button id="thumb-cancel" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Cancel</button>
+        <button id="thumb-save" disabled class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed font-medium">Save thumbnail</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = { games: [], recommended: null, pollTimer: null };
+
+  const fmtHours = (h) => h == null ? null : (h < 1 ? `${Math.round(h * 60)} min` : `${h.toFixed(1).replace(/\.0$/, '')} h`);
+  const metric = () => $('metric').value;
+
+  function hoursText(g) {
+    if (g.playtime_status === 'pending') return '⏳ Looking up…';
+    const h = g[metric()];
+    if (h == null) return 'Playtime unknown';
+    return `⏱ ${fmtHours(h)}`;
+  }
+
+  function progressInfo(g) {
+    const target = g[metric()];
+    if (target == null || target <= 0) return null;
+    if (g.actual_hours == null) return { noData: true };
+    const pct = Math.max(0, Math.min(100, (g.actual_hours / target) * 100));
+    return { pct, diff: target - g.actual_hours };
+  }
+
+  // Hours remaining to reach the chosen completion metric; null when unknown.
+  function timeLeft(g) {
+    const target = g[metric()];
+    if (target == null) return null;
+    return target - (g.actual_hours ?? 0);
+  }
+
+  // Hours remaining to reach the chosen completion metric; null when unknown.
+  function timeLeft(g) {
+    const target = g[metric()];
+    if (target == null) return null;
+    return target - (g.actual_hours ?? 0);
+  }
+
+  function buildCard(g) {
+    const node = $('card-tpl').content.firstElementChild.cloneNode(true);
+    node.dataset.appid = g.appid;
+    const img = node.querySelector('img');
+    const placeholder = node.querySelector('.placeholder');
+    const showPlaceholder = () => {
+      img.classList.add('hidden');
+      placeholder.classList.remove('hidden');
+    };
+    img.src = g.thumbnail;
+    img.alt = g.name;
+    let fallbackTried = false;
+    img.onerror = () => {
+      if (!fallbackTried) {
+        fallbackTried = true;
+        img.src = `https://cdn.akamai.steamstatic.com/steam/apps/${g.appid}/capsule_231x87.jpg`;
+      } else {
+        img.onerror = null;
+        showPlaceholder();
+      }
+    };
+    node.querySelector('.title').textContent = g.name;
+    node.querySelector('.title').title = g.name;
+    const badge = node.querySelector('.badge');
+    badge.textContent = g.installed ? 'Installed' : 'Not installed';
+    badge.className += g.installed ? ' bg-emerald-500/90 text-emerald-950' : ' bg-slate-700/90 text-slate-200';
+    node.querySelector('.hours').textContent = hoursText(g);
+    if (g.playtime_source) node.querySelector('.source').textContent = g.playtime_source;
+    const progress = progressInfo(g);
+    if (progress && progress.noData) {
+      node.querySelector('.no-progress').classList.remove('hidden');
+    } else if (progress) {
+      node.querySelector('.progress-wrap').classList.remove('hidden');
+      node.querySelector('.progress-bar').style.width = `${progress.pct}%`;
+      node.querySelector('.progress-bar').classList.toggle('bg-emerald-500', progress.diff >= 0);
+      node.querySelector('.progress-bar').classList.toggle('bg-amber-500', progress.diff < 0);
+      node.querySelector('.progress-label').textContent = `${fmtHours(g.actual_hours)} played · ` + (
+        progress.diff >= 0 ? `${fmtHours(progress.diff)} left` : `${fmtHours(-progress.diff)} over estimate`);
+    }
+    if (g.extra_hours || g.completionist_hours) {
+      node.title = [g.main_hours && `Main: ${fmtHours(g.main_hours)}`,
+                    g.extra_hours && `Main + extras: ${fmtHours(g.extra_hours)}`,
+                    g.completionist_hours && `Completionist: ${fmtHours(g.completionist_hours)}`].filter(Boolean).join('\n');
+    }
+    node.addEventListener('click', () => { window.location.href = `steam://nav/games/details/${g.appid}`; });
+    node.style.cursor = 'pointer';
+    node.querySelector('.thumb-edit').addEventListener('click', (e) => {
+      e.stopPropagation();
+      thumbOpen(g.appid, g.name);
+    });
+    return node;
+  }
+
+  // --- Thumbnail override upload modal: pick an image, pan/zoom it into the card's crop shape, upload it. ---
+  const CROP_W = 460, CROP_H = 215, OUTPUT_SCALE = 2;
+  const thumbModal = {
+    el: $('thumb-modal'), canvas: $('thumb-canvas'), fileInput: $('thumb-file'),
+    cropWrap: $('thumb-crop-wrap'), zoom: $('thumb-zoom'), nameEl: $('thumb-modal-name'),
+    errorEl: $('thumb-error'), saveBtn: $('thumb-save'),
+    appid: null, img: null, scale: 1, minScale: 1, offsetX: 0, offsetY: 0,
+    dragging: false, dragStartX: 0, dragStartY: 0, startOffsetX: 0, startOffsetY: 0,
+  };
+  const thumbCtx = thumbModal.canvas.getContext('2d');
+
+  function thumbOpen(appid, name) {
+    thumbModal.appid = appid;
+    thumbModal.img = null;
+    thumbModal.nameEl.textContent = name;
+    thumbModal.fileInput.value = '';
+    thumbModal.cropWrap.classList.add('hidden');
+    thumbModal.errorEl.classList.add('hidden');
+    thumbModal.saveBtn.disabled = true;
+    thumbModal.el.classList.remove('hidden');
+    thumbModal.el.classList.add('flex');
+  }
+
+  function thumbClose() {
+    thumbModal.el.classList.add('hidden');
+    thumbModal.el.classList.remove('flex');
+  }
+
+  function thumbClampOffsets() {
+    const dw = thumbModal.img.naturalWidth * thumbModal.scale;
+    const dh = thumbModal.img.naturalHeight * thumbModal.scale;
+    thumbModal.offsetX = Math.min(0, Math.max(CROP_W - dw, thumbModal.offsetX));
+    thumbModal.offsetY = Math.min(0, Math.max(CROP_H - dh, thumbModal.offsetY));
+  }
+
+  function thumbDraw() {
+    thumbCtx.clearRect(0, 0, CROP_W, CROP_H);
+    if (!thumbModal.img) return;
+    const dw = thumbModal.img.naturalWidth * thumbModal.scale;
+    const dh = thumbModal.img.naturalHeight * thumbModal.scale;
+    thumbCtx.drawImage(thumbModal.img, thumbModal.offsetX, thumbModal.offsetY, dw, dh);
+  }
+
+  function thumbPoint(e) {
+    const rect = thumbModal.canvas.getBoundingClientRect();
+    return { x: (e.clientX - rect.left) * (CROP_W / rect.width), y: (e.clientY - rect.top) * (CROP_H / rect.height) };
+  }
+
+  function thumbLoadImageFile(file) {
+    thumbModal.errorEl.classList.add('hidden');
+    if (!file || !file.type.startsWith('image/')) {
+      thumbModal.errorEl.textContent = 'Please choose an image file.';
+      thumbModal.errorEl.classList.remove('hidden');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        thumbModal.img = img;
+        thumbModal.minScale = Math.max(CROP_W / img.naturalWidth, CROP_H / img.naturalHeight);
+        thumbModal.scale = thumbModal.minScale;
+        thumbModal.offsetX = (CROP_W - img.naturalWidth * thumbModal.scale) / 2;
+        thumbModal.offsetY = (CROP_H - img.naturalHeight * thumbModal.scale) / 2;
+        thumbModal.zoom.value = 0;
+        thumbModal.cropWrap.classList.remove('hidden');
+        thumbModal.saveBtn.disabled = false;
+        thumbDraw();
+      };
+      img.onerror = () => {
+        thumbModal.errorEl.textContent = "Couldn't read that image.";
+        thumbModal.errorEl.classList.remove('hidden');
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  thumbModal.fileInput.addEventListener('change', () => thumbLoadImageFile(thumbModal.fileInput.files[0]));
+
+  document.addEventListener('paste', (e) => {
+    if (thumbModal.el.classList.contains('hidden')) return;
+    const item = Array.from(e.clipboardData?.items || []).find((it) => it.type.startsWith('image/'));
+    if (!item) return;
+    e.preventDefault();
+    thumbLoadImageFile(item.getAsFile());
+  });
+
+
+  thumbModal.zoom.addEventListener('input', () => {
+    if (!thumbModal.img) return;
+    const t = Number(thumbModal.zoom.value) / 100;
+    thumbModal.scale = thumbModal.minScale * (1 + t * 2);
+    thumbClampOffsets();
+    thumbDraw();
+  });
+
+  thumbModal.canvas.addEventListener('pointerdown', (e) => {
+    if (!thumbModal.img) return;
+    thumbModal.canvas.setPointerCapture(e.pointerId);
+    const p = thumbPoint(e);
+    thumbModal.dragging = true;
+    thumbModal.dragStartX = p.x;
+    thumbModal.dragStartY = p.y;
+    thumbModal.startOffsetX = thumbModal.offsetX;
+    thumbModal.startOffsetY = thumbModal.offsetY;
+  });
+  thumbModal.canvas.addEventListener('pointermove', (e) => {
+    if (!thumbModal.dragging) return;
+    const p = thumbPoint(e);
+    thumbModal.offsetX = thumbModal.startOffsetX + (p.x - thumbModal.dragStartX);
+    thumbModal.offsetY = thumbModal.startOffsetY + (p.y - thumbModal.dragStartY);
+    thumbClampOffsets();
+    thumbDraw();
+  });
+  window.addEventListener('pointerup', () => { thumbModal.dragging = false; });
+
+  $('thumb-modal-close').addEventListener('click', thumbClose);
+  $('thumb-cancel').addEventListener('click', thumbClose);
+  thumbModal.el.addEventListener('click', thumbClose);
+
+  $('thumb-save').addEventListener('click', () => {
+    if (!thumbModal.img || !thumbModal.appid) return;
+    thumbModal.saveBtn.disabled = true;
+    thumbModal.errorEl.classList.add('hidden');
+    const out = document.createElement('canvas');
+    out.width = CROP_W * OUTPUT_SCALE;
+    out.height = CROP_H * OUTPUT_SCALE;
+    out.getContext('2d').drawImage(
+      thumbModal.img,
+      thumbModal.offsetX * OUTPUT_SCALE, thumbModal.offsetY * OUTPUT_SCALE,
+      thumbModal.img.naturalWidth * thumbModal.scale * OUTPUT_SCALE,
+      thumbModal.img.naturalHeight * thumbModal.scale * OUTPUT_SCALE,
+    );
+    out.toBlob(async (blob) => {
+      if (!blob) {
+        thumbModal.errorEl.textContent = 'Could not process that image.';
+        thumbModal.errorEl.classList.remove('hidden');
+        thumbModal.saveBtn.disabled = false;
+        return;
+      }
+      const appid = thumbModal.appid;
+      const form = new FormData();
+      form.append('image', blob, `${appid}.jpg`);
+      try {
+        const res = await fetch(`/api/thumbnail/${appid}/override`, { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        document.querySelectorAll(`.group[data-appid="${appid}"]`).forEach((card) => {
+          const img = card.querySelector('img');
+          img.onerror = null;
+          img.classList.remove('hidden');
+          img.src = `/thumb/${appid}?v=${Date.now()}`;
+          card.querySelector('.placeholder').classList.add('hidden');
+        });
+        thumbClose();
+      } catch (e) {
+        thumbModal.errorEl.textContent = e.message;
+        thumbModal.errorEl.classList.remove('hidden');
+        thumbModal.saveBtn.disabled = false;
+      }
+    }, 'image/jpeg', 0.92);
+  });
+
+  const sorters = {
+    name: (a, b) => a.name.localeCompare(b.name),
+    'time-asc': (a, b) => (a[metric()] ?? Infinity) - (b[metric()] ?? Infinity),
+    'time-desc': (a, b) => (b[metric()] ?? -Infinity) - (a[metric()] ?? -Infinity),
+    'time-left-asc': (a, b) => (timeLeft(a) ?? Infinity) - (timeLeft(b) ?? Infinity),
+    installed: (a, b) => (b.installed - a.installed) || a.name.localeCompare(b.name),
+  };
+
+  function statusMatches(status, g) {
+    switch (status) {
+      case 'installed': return g.installed;
+      case 'uninstalled': return !g.installed;
+      case 'no-playtime': return g[metric()] == null;
+      default: return true;
+    }
+  }
+
+  function render() {
+    const q = $('search').value.trim().toLowerCase();
+    const status = $('status').value;
+    const includeHidden = $('include-hidden').checked;
+    const source = state.recommended ?? state.games;
+    const sort = $('sort').value;
+    let list = source.filter((g) =>
+      (!q || g.name.toLowerCase().includes(q)) &&
+      statusMatches(status, g) &&
+      (includeHidden || !g.hidden));
+    // "Time left" ranks remaining hours, so games already fully completed don't belong in it.
+    if (sort === 'time-left-asc') list = list.filter((g) => { const tl = timeLeft(g); return tl != null && tl > 0; });
+    if (!state.recommended || $('sort').dataset.touched) list = [...list].sort(sorters[sort]);
+
+    const frag = document.createDocumentFragment();
+    list.forEach((g) => frag.appendChild(buildCard(g)));
+    $('grid').replaceChildren(frag);
+    $('empty').classList.toggle('hidden', list.length > 0);
+
+    const installed = state.games.filter((g) => g.installed).length;
+    $('counts').textContent = `${state.games.length} games · ${installed} installed · showing ${list.length}`;
+  }
+
+  function showProgress(s) {
+    const show = s.running || s.offline;
+    $('progress').classList.toggle('hidden', !show);
+    if (!show) return;
+    const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
+    $('progress-bar').style.width = `${pct}%`;
+    $('progress-count').textContent = `${s.done} / ${s.total}`;
+    $('progress-label').textContent = s.offline ? `⚠ ${s.message}` : `Fetching playtimes… ${s.current ?? ''}`;
+  }
+
+  async function loadGames() {
+    try {
+      const res = await fetch('/api/games');
+      const data = await res.json();
+      state.games = data.games;
+      showProgress(data.status);
+      render();
+      schedulePoll(data.status.running);
+    } catch (e) {
+      $('counts').textContent = 'Could not reach the SteamNext server.';
+    }
+  }
+
+  function schedulePoll(running) {
+    clearTimeout(state.pollTimer);
+    if (running) state.pollTimer = setTimeout(loadGames, 4000);
+  }
+
+  async function recommend(params) {
+    $('rec-error').classList.add('hidden');
+    state.lastParams = params;
+    try {
+      const res = await fetch('/api/recommend?' + new URLSearchParams({
+        ...params, metric: metric(), include_hidden: $('include-hidden').checked ? '1' : '0',
+      }));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      state.recommended = data.games;
+      delete $('sort').dataset.touched;
+      $('rec-text').textContent = `${data.games.length} games fit “${data.range.label}” — installed games first, shortest first.`;
+      $('rec-banner').classList.remove('hidden');
+      render();
+    } catch (e) {
+      $('rec-error').textContent = e.message;
+      $('rec-error').classList.remove('hidden');
+    }
+  }
+
+  function setActivePreset(key) {
+    document.querySelectorAll('.preset').forEach((btn) => {
+      btn.classList.toggle('preset-active', key != null && btn.dataset.preset === key);
+    });
+  }
+
+  document.querySelectorAll('.preset').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      setActivePreset(btn.dataset.preset);
+      recommend({ preset: btn.dataset.preset });
+    }));
+  $('nl-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const q = $('nl').value.trim();
+    if (q) {
+      setActivePreset(null);
+      recommend({ q });
+    }
+  });
+  $('rec-clear').addEventListener('click', () => {
+    state.recommended = null;
+    setActivePreset(null);
+    $('rec-banner').classList.add('hidden');
+    render();
+  });
+  $('search').addEventListener('input', render);
+  $('status').addEventListener('change', render);
+  $('sort').addEventListener('change', (e) => { e.target.dataset.touched = '1'; render(); });
+  $('metric').addEventListener('change', () => {
+    if (state.recommended) recommend(state.lastParams); else render();
+  });
+  $('include-hidden').addEventListener('change', () => {
+    if (state.recommended) recommend(state.lastParams); else render();
+  });
+  $('rescan').addEventListener('click', async () => {
+    if (!confirm('Rescan your Steam library now? This may take a while.')) return;
+    $('rescan').disabled = true;
+    try { await fetch('/api/rescan', { method: 'POST' }); await loadGames(); }
+    finally { $('rescan').disabled = false; }
+  });
+
+  loadGames();
+})();
+</script>
+</body>
+</html>
