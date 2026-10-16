@@ -150,7 +150,7 @@ class TimeBudgetParser:
 
 
 class GameRecommender:
-    """Filters game dicts to a time range using the chosen playtime metric; installed games first."""
+    """Filters game dicts to a time range using the chosen playtime metric."""
 
     METRICS = ("main_hours", "extra_hours", "completionist_hours")
 
@@ -160,4 +160,4 @@ class GameRecommender:
             raise ValueError(f"Unknown playtime metric '{metric}'")
         matches = [g for g in games if g.get(metric) is not None and time_range.contains(g[metric])
                    and (include_hidden or not g.get("hidden"))]
-        return sorted(matches, key=lambda g: (not g.get("installed"), g[metric]))
+        return sorted(matches, key=lambda g: g[metric])

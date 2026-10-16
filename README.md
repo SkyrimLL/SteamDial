@@ -98,6 +98,21 @@ Invoke-WebRequest -Uri "https://github.com/tailwindlabs/tailwindcss/releases/lat
 .\tools\tailwindcss.exe -i assets\tailwind.src.css -o assets\app.css --minify
 ```
 
+## Building a standalone executable
+
+Package Steam Dial as a single `SteamDial.exe` (no Python install required to run it) with
+[PyInstaller](https://pyinstaller.org/):
+
+```powershell
+pip install pyinstaller pyinstaller-hooks-contrib
+pyinstaller steamdial.spec --clean
+```
+
+The result is `dist\SteamDial.exe`. On first run it creates `data\` and `thumbnails\` folders
+(and reads an optional `.env`) next to the exe itself — nothing user-specific is baked into the
+binary, and the templates/CSS bundled inside it are read-only. Copy `.env` next to the exe if you
+want the SteamGridDB/Steam Web API keys, same as running from source.
+
 ## Usage
 
 ```powershell

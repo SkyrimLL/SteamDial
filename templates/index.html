@@ -39,6 +39,15 @@
         <div class="flex items-center gap-3 text-sm">
           <span id="counts" class="text-slate-400"></span>
           <button id="rescan" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Rescan</button>
+          <button id="settings-btn" type="button" title="Settings" aria-label="Settings"
+                  class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">
+            <!-- Lucide "settings" icon (https://lucide.dev/icons/settings), vendored inline — no CDN/runtime dependency -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5">
+              <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -168,6 +177,43 @@
       <div class="flex justify-end gap-2 mt-5">
         <button id="thumb-cancel" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Cancel</button>
         <button id="thumb-save" disabled class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed font-medium">Save thumbnail</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
+    <div class="w-full max-w-md rounded-xl bg-slate-900 border border-white/10 p-5" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-3 gap-3">
+        <h3 class="font-semibold">Settings</h3>
+        <button id="settings-modal-close" class="text-slate-400 hover:text-white text-xl leading-none shrink-0">&times;</button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label for="settings-steam-api-key" class="block text-sm text-slate-400 mb-1">Steam Web API key</label>
+          <input id="settings-steam-api-key" type="text" autocomplete="off" placeholder="optional, enables real playtime"
+                 class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono text-sm">
+          <p class="text-xs text-slate-500 mt-1">Get a free key from
+            <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener" class="text-sky-400 hover:underline">steamcommunity.com/dev/apikey</a>.
+          </p>
+        </div>
+        <div>
+          <label for="settings-steamgriddb-api-key" class="block text-sm text-slate-400 mb-1">SteamGridDB API key</label>
+          <input id="settings-steamgriddb-api-key" type="text" autocomplete="off" placeholder="optional, thumbnail fallback"
+                 class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono text-sm">
+          <p class="text-xs text-slate-500 mt-1">Get a free key from
+            <a href="https://www.steamgriddb.com/profile/preferences/api" target="_blank" rel="noopener" class="text-sky-400 hover:underline">steamgriddb.com</a>.
+          </p>
+        </div>
+        <div class="flex items-center gap-2 text-sm">
+          <span class="text-slate-400">Steam API host:</span>
+          <span class="font-mono text-slate-300">localhost</span>
+        </div>
+      </div>
+      <p id="settings-error" class="hidden mt-3 text-sm text-rose-300"></p>
+      <p id="settings-saved" class="hidden mt-3 text-sm text-emerald-300">Saved — restart Steam Dial for changes to take effect.</p>
+      <div class="flex justify-end gap-2 mt-5">
+        <button id="settings-cancel" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Cancel</button>
+        <button id="settings-save" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 font-medium">Save</button>
       </div>
     </div>
   </div>
@@ -506,7 +552,7 @@
       if (!res.ok) throw new Error(data.error || 'Request failed');
       state.recommended = data.games;
       delete $('sort').dataset.touched;
-      $('rec-text').textContent = `${data.games.length} games fit “${data.range.label}” — installed games first, shortest first.`;
+      $('rec-text').textContent = `${data.games.length} games fit “${data.range.label}” — shortest first.`;
       $('rec-banner').classList.remove('hidden');
       render();
     } catch (e) {
@@ -554,6 +600,62 @@
     $('rescan').disabled = true;
     try { await fetch('/api/rescan', { method: 'POST' }); await loadGames(); }
     finally { $('rescan').disabled = false; }
+  });
+
+  // --- Settings modal: edit .env values (Steam Web API key, SteamGridDB API key). ---
+  const settingsModal = {
+    el: $('settings-modal'), steamKey: $('settings-steam-api-key'), gridDbKey: $('settings-steamgriddb-api-key'),
+    errorEl: $('settings-error'), savedEl: $('settings-saved'), saveBtn: $('settings-save'),
+  };
+
+  function settingsClose() {
+    settingsModal.el.classList.add('hidden');
+    settingsModal.el.classList.remove('flex');
+  }
+
+  async function settingsOpen() {
+    settingsModal.errorEl.classList.add('hidden');
+    settingsModal.savedEl.classList.add('hidden');
+    settingsModal.el.classList.remove('hidden');
+    settingsModal.el.classList.add('flex');
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      settingsModal.steamKey.value = data.steam_api_key || '';
+      settingsModal.gridDbKey.value = data.steamgriddb_api_key || '';
+    } catch (e) {
+      settingsModal.errorEl.textContent = "Couldn't load current settings.";
+      settingsModal.errorEl.classList.remove('hidden');
+    }
+  }
+
+  $('settings-btn').addEventListener('click', settingsOpen);
+  $('settings-modal-close').addEventListener('click', settingsClose);
+  $('settings-cancel').addEventListener('click', settingsClose);
+  settingsModal.el.addEventListener('click', settingsClose);
+
+  $('settings-save').addEventListener('click', async () => {
+    settingsModal.saveBtn.disabled = true;
+    settingsModal.errorEl.classList.add('hidden');
+    settingsModal.savedEl.classList.add('hidden');
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          steam_api_key: settingsModal.steamKey.value.trim(),
+          steamgriddb_api_key: settingsModal.gridDbKey.value.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Save failed');
+      settingsModal.savedEl.classList.remove('hidden');
+    } catch (e) {
+      settingsModal.errorEl.textContent = e.message;
+      settingsModal.errorEl.classList.remove('hidden');
+    } finally {
+      settingsModal.saveBtn.disabled = false;
+    }
   });
 
   loadGames();

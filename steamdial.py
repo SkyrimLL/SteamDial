@@ -7,10 +7,11 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import sys
 import threading
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv, set_key
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
 from cache_manager import GameCache
@@ -28,9 +29,14 @@ from thumbnail_cache import ThumbnailCache
 from thumbnail_providers import default_provider as default_thumbnail_provider
 from thumbnail_service import ThumbnailService
 
-BASE_DIR = Path(__file__).resolve().parent
+# Bundled, read-only assets (templates/static/icon): inside the PyInstaller bundle when frozen.
+RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+# Writable app data (cache/thumbnails/.env): next to the executable when frozen, so it persists
+# across runs instead of living in PyInstaller's onefile temp extraction folder.
+BASE_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
-load_dotenv(BASE_DIR / ".env")
+ENV_PATH = BASE_DIR / ".env"
+load_dotenv(ENV_PATH)
 DEFAULT_STEAM_ROOT = os.environ.get("STEAMDIAL_STEAM_ROOT", r"F:\Steam")
 DEFAULT_CACHE = DATA_DIR / "game_cache.json"
 DEFAULT_THUMBNAIL_DIR = BASE_DIR / "thumbnails"
@@ -55,8 +61,8 @@ def create_app(
 ) -> Flask:
     app = Flask(
         __name__,
-        template_folder=str(BASE_DIR / "templates"),
-        static_folder=str(BASE_DIR / "assets"),
+        template_folder=str(RESOURCE_DIR / "templates"),
+        static_folder=str(RESOURCE_DIR / "assets"),
         static_url_path="",
     )
 
@@ -74,6 +80,27 @@ def create_app(
     @app.get("/api/status")
     def api_status():
         return jsonify(enrichment.status())
+
+    @app.get("/api/settings")
+    def api_settings_get():
+        values = dotenv_values(ENV_PATH) if ENV_PATH.is_file() else {}
+        return jsonify(
+            steam_api_key=values.get("STEAM_API_KEY") or "",
+            steamgriddb_api_key=values.get("STEAMGRIDDB_API_KEY") or "",
+            steam_api_host="localhost",
+        )
+
+    @app.post("/api/settings")
+    def api_settings_post():
+        data = request.get_json(silent=True) or {}
+        steam_api_key = str(data.get("steam_api_key", "")).strip()
+        steamgriddb_api_key = str(data.get("steamgriddb_api_key", "")).strip()
+        ENV_PATH.touch(exist_ok=True)
+        set_key(str(ENV_PATH), "STEAM_API_KEY", steam_api_key)
+        set_key(str(ENV_PATH), "STEAMGRIDDB_API_KEY", steamgriddb_api_key)
+        os.environ["STEAM_API_KEY"] = steam_api_key
+        os.environ["STEAMGRIDDB_API_KEY"] = steamgriddb_api_key
+        return jsonify(ok=True, restart_required=True)
 
     @app.post("/api/rescan")
     def api_rescan():
@@ -196,7 +223,7 @@ def main() -> None:
         _run_in_window(app, args.host, args.port)
 
 
-DEFAULT_ICON = BASE_DIR / "assets" / "app-icon.ico"
+DEFAULT_ICON = RESOURCE_DIR / "assets" / "app-icon.ico"
 
 
 def _run_in_window(app: Flask, host: str, port: int) -> None:
