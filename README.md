@@ -1,7 +1,11 @@
 # Steam Dial
 
-A local, read-only Steam library browser that recommends what to play next based on how
+How much time do you have?
+
+SteamDial is a local, read-only Steam library browser that recommends what to play next based on how
 much time you have, using "time to beat" estimates (e.g. HowLongToBeat).
+
+It can also show you only much your play time compares to the estimated play time of a game.
 
 It runs a small Flask app served either in its own native window (via `pywebview`) or in
 a regular browser tab, and never writes to your Steam installation.
