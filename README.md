@@ -6,6 +6,9 @@ much time you have, using "time to beat" estimates (e.g. HowLongToBeat).
 It runs a small Flask app served either in its own native window (via `pywebview`) or in
 a regular browser tab, and never writes to your Steam installation.
 
+<img width="1964" height="1673" alt="screenshot" src="https://github.com/user-attachments/assets/eae573b9-d16c-4e8f-bd10-34f4abfe5c97" />
+
+
 ## Features
 
 - Scans your local Steam install for installed games (via `appinfo.vdf` and library cache
