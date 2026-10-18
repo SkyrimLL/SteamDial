@@ -28,6 +28,7 @@ from steam_web_api import SteamWebApiClient, resolve_steam_id64
 from thumbnail_cache import ThumbnailCache
 from thumbnail_providers import default_provider as default_thumbnail_provider
 from thumbnail_service import ThumbnailService
+from user_overrides import UserOverrides
 
 # Bundled, read-only assets (templates/static/icon): inside the PyInstaller bundle when frozen.
 RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -43,6 +44,7 @@ DEFAULT_THUMBNAIL_DIR = BASE_DIR / "thumbnails"
 DEFAULT_MISSING_PLAYTIME_LOG = DATA_DIR / "missing_completionist.json"
 DEFAULT_COMPLETIONIST_OVERRIDES = DATA_DIR / "missing_completionist_override.json"
 DEFAULT_OWNED_GAMES_CACHE = DATA_DIR / "owned_games_cache.json"
+DEFAULT_USER_OVERRIDES = DATA_DIR / "user_overrides.json"
 
 log = logging.getLogger("steamdial")
 
@@ -57,6 +59,7 @@ def create_app(
     missing_playtime_log: MissingPlaytimeLogger,
     actual_playtime: ActualPlaytimeService,
     owned_games_cache: OwnedGamesCache,
+    user_overrides: UserOverrides,
     allow_fetch: bool = True,
 ) -> Flask:
     app = Flask(
@@ -155,6 +158,25 @@ def create_app(
             return jsonify(error=str(exc)), 400
         return jsonify(ok=True)
 
+    @app.post("/api/game/<int:appid>/override")
+    def api_game_override(appid: int):
+        if appid <= 0:
+            abort(404)
+        data = request.get_json(silent=True) or {}
+        hidden = bool(data.get("hidden", False))
+        completed = bool(data.get("completed", False))
+        raw_hours = data.get("completionist_hours")
+        completionist_hours = None
+        if raw_hours not in (None, ""):
+            try:
+                completionist_hours = float(raw_hours)
+            except (TypeError, ValueError):
+                return jsonify(error="completionist_hours must be a number"), 400
+            if completionist_hours < 0:
+                return jsonify(error="completionist_hours must not be negative"), 400
+        user_overrides.set(appid, hidden=hidden, completed=completed, completionist_hours=completionist_hours)
+        return jsonify(ok=True)
+
     return app
 
 
@@ -169,6 +191,8 @@ def main() -> None:
                       help="JSON file with manually supplied completionist_hours, used to patch cache gaps")
     cli.add_argument("--owned-games-cache", default=str(DEFAULT_OWNED_GAMES_CACHE),
                       help="JSON file caching the account's owned-games list from the Steam Web API")
+    cli.add_argument("--user-overrides", default=str(DEFAULT_USER_OVERRIDES),
+                      help="JSON file with per-game hidden/completed/completionist_hours overrides set via the edit panel")
     cli.add_argument("--steamgriddb-api-key", default=os.environ.get("STEAMGRIDDB_API_KEY"),
                       help="Optional SteamGridDB API key, used as a fallback thumbnail source")
     cli.add_argument("--steam-api-key", default=os.environ.get("STEAM_API_KEY"),
@@ -194,9 +218,10 @@ def main() -> None:
     actual_playtime = ActualPlaytimeService(owned_games_cache)
 
     completionist_overrides = CompletionistOverrides(Path(args.completionist_overrides))
+    user_overrides = UserOverrides(Path(args.user_overrides))
 
     scanner = SteamLibraryScanner(steam_root, owned_games=owned_games_cache.snapshot)
-    library = LibraryService(scanner, cache, actual_playtime, completionist_overrides)
+    library = LibraryService(scanner, cache, actual_playtime, completionist_overrides, user_overrides)
     missing_playtime_log = MissingPlaytimeLogger(cache, Path(args.missing_playtime_log), completionist_overrides)
     enrichment = PlaytimeEnrichmentService(
         cache, default_provider(), on_run_complete=lambda: missing_playtime_log.refresh_async(library.games),
@@ -214,7 +239,8 @@ def main() -> None:
     missing_playtime_log.refresh_async(games)
 
     app = create_app(library, scanner, enrichment, TimeBudgetParser(), GameRecommender(), thumbnails,
-                     missing_playtime_log, actual_playtime, owned_games_cache, allow_fetch=not args.no_fetch)
+                     missing_playtime_log, actual_playtime, owned_games_cache, user_overrides,
+                     allow_fetch=not args.no_fetch)
 
     if args.browser:
         log.info("Steam Dial running at http://%s:%d", args.host, args.port)

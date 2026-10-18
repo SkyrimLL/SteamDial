@@ -38,7 +38,14 @@
         </div>
         <div class="flex items-center gap-3 text-sm">
           <span id="counts" class="text-slate-400"></span>
-          <button id="rescan" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Rescan</button>
+          <button id="rescan" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">
+            <!-- Lucide "activity" icon (https://lucide.dev/icons/activity), vendored inline — no CDN/runtime dependency -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            <span>Rescan</span>
+          </button>
           <button id="settings-btn" type="button" title="Settings" aria-label="Settings"
                   class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">
             <!-- Lucide "settings" icon (https://lucide.dev/icons/settings), vendored inline — no CDN/runtime dependency -->
@@ -89,6 +96,10 @@
           <input id="include-hidden" type="checkbox" class="rounded border-white/20 bg-slate-900">
           Include hidden games
         </label>
+        <label class="flex items-center gap-2 ml-2 text-slate-400 cursor-pointer select-none">
+          <input id="hide-completed" type="checkbox" class="rounded border-white/20 bg-slate-900">
+          Hide completed games
+        </label>
       </div>
     </div>
   </header>
@@ -127,16 +138,42 @@
       <div class="relative">
         <img class="card-img w-full object-cover bg-slate-800" loading="lazy" alt="">
         <div class="placeholder hidden card-img w-full bg-gradient-to-br from-slate-800 to-slate-700"></div>
-        <span class="badge absolute top-2 right-2 text-[11px] font-semibold px-2 py-0.5 rounded-full"></span>
-        <button type="button" class="thumb-edit absolute top-2 left-2 z-10 p-1.5 rounded-full bg-black/60 hover:bg-sky-600/90 text-slate-200 opacity-0 group-hover:opacity-100 focus:opacity-100 transition" title="Change thumbnail" aria-label="Change thumbnail">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-            <path d="M3.5 14.6V17h2.4l7.1-7.1-2.4-2.4-7.1 7.1z"/>
-            <path d="M14.1 4.9a1.2 1.2 0 0 0-1.7 0l-1.2 1.2 2.4 2.4 1.2-1.2a1.2 1.2 0 0 0 0-1.7l-.7-.7z"/>
-          </svg>
-        </button>
+        <div class="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
+          <span class="badge text-[11px] font-semibold px-2 py-0.5 rounded-full"></span>
+        </div>
+        <div class="absolute top-2 left-2 z-10 flex gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition">
+          <button type="button" class="thumb-edit p-1.5 rounded-full bg-black/60 hover:bg-sky-600/90 text-slate-200" title="Change thumbnail" aria-label="Change thumbnail">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+              <path d="M16 5h6"/>
+              <path d="M19 2v6"/>
+              <path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5"/>
+              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+              <circle cx="9" cy="9" r="2"/>
+            </svg>
+          </button>
+          <button type="button" class="game-edit p-1.5 rounded-full bg-black/60 hover:bg-sky-600/90 text-slate-200" title="Edit game" aria-label="Edit game">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="p-3">
-        <h3 class="title font-semibold leading-tight line-clamp-2 min-h-[2.5rem]"></h3>
+        <h3 class="title-row font-semibold leading-tight min-h-[2.5rem] flex items-start gap-1.5">
+          <span class="title line-clamp-2 min-w-0 flex-1 mr-1"></span>
+          <svg class="completed-icon hidden shrink-0 mt-0.5 w-4 h-4 text-amber-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" title="Completed">
+            <path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2"/>
+            <path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2"/>
+            <path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3"/>
+            <path d="M4 22h16"/>
+            <path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/>
+            <path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/>
+          </svg>
+        </h3>
         <div class="mt-2 flex items-center justify-between text-sm">
           <span class="hours text-slate-300"></span>
           <span class="source text-[11px] text-slate-500"></span>
@@ -177,6 +214,36 @@
       <div class="flex justify-end gap-2 mt-5">
         <button id="thumb-cancel" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Cancel</button>
         <button id="thumb-save" disabled class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed font-medium">Save thumbnail</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="edit-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
+    <div class="w-full max-w-md rounded-xl bg-slate-900 border border-white/10 p-5" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-3 gap-3">
+        <h3 class="font-semibold truncate">Edit — <span id="edit-modal-name"></span></h3>
+        <button id="edit-modal-close" class="text-slate-400 hover:text-white text-xl leading-none shrink-0">&times;</button>
+      </div>
+      <div class="space-y-4">
+        <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+          <input id="edit-completed" type="checkbox" class="rounded border-white/20 bg-slate-900">
+          Mark as completed (outside Steam)
+        </label>
+        <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+          <input id="edit-hidden" type="checkbox" class="rounded border-white/20 bg-slate-900">
+          Hide this game (even if not hidden in Steam)
+        </label>
+        <div>
+          <label for="edit-completionist-hours" class="block text-sm text-slate-400 mb-1">Completionist hours override</label>
+          <input id="edit-completionist-hours" type="number" min="0" step="0.1" placeholder="e.g. 25.5"
+                 class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm">
+          <p id="edit-completionist-current" class="text-xs text-slate-500 mt-1"></p>
+        </div>
+      </div>
+      <p id="edit-error" class="hidden mt-3 text-sm text-rose-300"></p>
+      <div class="flex justify-end gap-2 mt-5">
+        <button id="edit-cancel" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Cancel</button>
+        <button id="edit-save" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 font-medium">Save</button>
       </div>
     </div>
   </div>
@@ -222,6 +289,30 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const state = { games: [], recommended: null, pollTimer: null };
+
+  // Remember the user's sort/filter selections across app restarts.
+  const PREFS_KEY = 'steamdial.prefs';
+  const PREF_FIELDS = ['status', 'sort', 'metric', 'include-hidden', 'hide-completed'];
+
+  function loadPrefs() {
+    try {
+      const prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+      PREF_FIELDS.forEach((id) => {
+        if (!(id in prefs)) return;
+        const el = $(id);
+        if (el.type === 'checkbox') el.checked = prefs[id]; else el.value = prefs[id];
+      });
+    } catch (e) { /* ignore malformed/unavailable storage */ }
+  }
+
+  function savePrefs() {
+    const prefs = {};
+    PREF_FIELDS.forEach((id) => {
+      const el = $(id);
+      prefs[id] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* storage unavailable */ }
+  }
 
   const fmtHours = (h) => h == null ? null : (h < 1 ? `${Math.round(h * 60)} min` : `${h.toFixed(1).replace(/\.0$/, '')} h`);
   const metric = () => $('metric').value;
@@ -281,6 +372,7 @@
     const badge = node.querySelector('.badge');
     badge.textContent = g.installed ? 'Installed' : 'Not installed';
     badge.className += g.installed ? ' bg-emerald-500/90 text-emerald-950' : ' bg-slate-700/90 text-slate-200';
+    node.querySelector('.completed-icon').classList.toggle('hidden', !g.completed);
     node.querySelector('.hours').textContent = hoursText(g);
     if (g.playtime_source) node.querySelector('.source').textContent = g.playtime_source;
     const progress = progressInfo(g);
@@ -304,6 +396,10 @@
     node.querySelector('.thumb-edit').addEventListener('click', (e) => {
       e.stopPropagation();
       thumbOpen(g.appid, g.name);
+    });
+    node.querySelector('.game-edit').addEventListener('click', (e) => {
+      e.stopPropagation();
+      editOpen(g);
     });
     return node;
   }
@@ -472,6 +568,72 @@
     }, 'image/jpeg', 0.92);
   });
 
+  // --- Edit panel: mark a game completed/hidden outside Steam, or override its completionist hours. ---
+  const editModal = {
+    el: $('edit-modal'), nameEl: $('edit-modal-name'), completed: $('edit-completed'), hidden: $('edit-hidden'),
+    hoursInput: $('edit-completionist-hours'), currentEl: $('edit-completionist-current'),
+    errorEl: $('edit-error'), saveBtn: $('edit-save'), appid: null,
+  };
+
+  function editClose() {
+    editModal.el.classList.add('hidden');
+    editModal.el.classList.remove('flex');
+  }
+
+  function editOpen(g) {
+    editModal.appid = g.appid;
+    editModal.nameEl.textContent = g.name;
+    editModal.completed.checked = !!g.completed;
+    editModal.hidden.checked = !!g.user_hidden;
+    editModal.hoursInput.value = g.completionist_override_hours ?? '';
+    const auto = g.playtime_source !== 'manual' ? g.completionist_hours : null;
+    editModal.currentEl.textContent = auto != null ? `Current estimate: ${fmtHours(auto)}` : 'No completionist estimate on file.';
+    editModal.errorEl.classList.add('hidden');
+    editModal.el.classList.remove('hidden');
+    editModal.el.classList.add('flex');
+  }
+
+  $('edit-modal-close').addEventListener('click', editClose);
+  $('edit-cancel').addEventListener('click', editClose);
+  editModal.el.addEventListener('click', editClose);
+
+  $('edit-save').addEventListener('click', async () => {
+    if (!editModal.appid) return;
+    const raw = editModal.hoursInput.value.trim();
+    let completionistHours = null;
+    if (raw !== '') {
+      const num = Number(raw);
+      if (!Number.isFinite(num) || num < 0) {
+        editModal.errorEl.textContent = 'Completionist hours must be a non-negative number.';
+        editModal.errorEl.classList.remove('hidden');
+        return;
+      }
+      completionistHours = num;
+    }
+    editModal.saveBtn.disabled = true;
+    editModal.errorEl.classList.add('hidden');
+    try {
+      const res = await fetch(`/api/game/${editModal.appid}/override`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hidden: editModal.hidden.checked,
+          completed: editModal.completed.checked,
+          completionist_hours: completionistHours,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Save failed');
+      editClose();
+      await loadGames();
+    } catch (e) {
+      editModal.errorEl.textContent = e.message;
+      editModal.errorEl.classList.remove('hidden');
+    } finally {
+      editModal.saveBtn.disabled = false;
+    }
+  });
+
   const sorters = {
     name: (a, b) => a.name.localeCompare(b.name),
     'time-asc': (a, b) => (a[metric()] ?? Infinity) - (b[metric()] ?? Infinity),
@@ -494,12 +656,14 @@
     const q = $('search').value.trim().toLowerCase();
     const status = $('status').value;
     const includeHidden = $('include-hidden').checked;
+    const hideCompleted = $('hide-completed').checked;
     const source = state.recommended ?? state.games;
     const sort = $('sort').value;
     let list = source.filter((g) =>
       (!q || g.name.toLowerCase().includes(q)) &&
       statusMatches(status, g) &&
-      (includeHidden || !g.hidden));
+      (includeHidden || !g.hidden) &&
+      (!hideCompleted || !g.completed));
     // "Time left" ranks remaining hours, so games already fully completed don't belong in it.
     if (sort === 'time-left-asc') list = list.filter((g) => { const tl = timeLeft(g); return tl != null && tl > 0; });
     if (!state.recommended || $('sort').dataset.touched) list = [...list].sort(sorters[sort]);
@@ -587,14 +751,17 @@
     render();
   });
   $('search').addEventListener('input', render);
-  $('status').addEventListener('change', render);
-  $('sort').addEventListener('change', (e) => { e.target.dataset.touched = '1'; render(); });
+  $('status').addEventListener('change', () => { savePrefs(); render(); });
+  $('sort').addEventListener('change', (e) => { e.target.dataset.touched = '1'; savePrefs(); render(); });
   $('metric').addEventListener('change', () => {
+    savePrefs();
     if (state.recommended) recommend(state.lastParams); else render();
   });
   $('include-hidden').addEventListener('change', () => {
+    savePrefs();
     if (state.recommended) recommend(state.lastParams); else render();
   });
+  $('hide-completed').addEventListener('change', () => { savePrefs(); render(); });
   $('rescan').addEventListener('click', async () => {
     if (!confirm('Rescan your Steam library now? This may take a while.')) return;
     $('rescan').disabled = true;
@@ -658,6 +825,7 @@
     }
   });
 
+  loadPrefs();
   loadGames();
 })();
 </script>
