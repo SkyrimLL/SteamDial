@@ -37,10 +37,13 @@ Paste the key(s) in, hit **Save**, then restart Steam Dial for them to take effe
 
 ## Running a scan
 
-Steam Dial scans your library automatically on startup. If you've bought, installed, or
-uninstalled games since then, click **Rescan** in the top bar to refresh the list — this
-also re-checks for new playtime estimates and artwork in the background (shown by the
-progress bar under the search bar).
+Steam Dial scans your library automatically on startup, and also checks the Steam Web API
+and local files in the background every few minutes for newly bought games. When new games
+are found, an orange **Scan new games** button appears next to **Rescan**; click it to add
+just those games without re-scanning your whole library. Use **Rescan** instead if you've
+installed/uninstalled/hidden games and want to refresh the full list — this also re-checks
+for new playtime estimates and artwork in the background (shown by the progress bar under
+the search bar).
 
 ## Fixing missing thumbnails
 

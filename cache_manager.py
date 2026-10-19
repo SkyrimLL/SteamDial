@@ -84,9 +84,11 @@ class GameCache:
                 log.error("Failed to write cache %s: %s", self.path, exc)
         return entry
 
-    def needs_lookup(self, appid: int, retry_missing_after_s: float) -> bool:
-        """True for unknown games, or games previously not found whose retry window elapsed."""
+    def needs_lookup(self, appid: int, name: str, retry_missing_after_s: float) -> bool:
+        """True for unknown games, renamed games (e.g. a fixed mislabel), or stale not-found ones."""
         entry = self.get(appid)
         if entry is None:
+            return True
+        if entry.name != name:
             return True
         return not entry.found and (time.time() - entry.fetched_at) > retry_missing_after_s

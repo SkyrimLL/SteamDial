@@ -53,15 +53,20 @@ class PlaytimeEnrichmentService:
         with self._lock:
             return asdict(self._status)
 
-    def pending(self, games: Sequence[SteamGame]) -> list[SteamGame]:
-        return [g for g in games if self._cache.needs_lookup(g.appid, self._retry_after)]
+    def pending(self, games: Sequence[SteamGame], force: bool = False) -> list[SteamGame]:
+        if force:
+            return list(games)
+        return [g for g in games if self._cache.needs_lookup(g.appid, g.name, self._retry_after)]
 
-    def start(self, games: Sequence[SteamGame]) -> bool:
-        """Starts a background run if one isn't active. Returns False if already running."""
+    def start(self, games: Sequence[SteamGame], force: bool = False) -> bool:
+        """Starts a background run if one isn't active. Returns False if already running.
+
+        `force` re-checks every game regardless of cache staleness (used by a full Rescan).
+        """
         with self._lock:
             if self._thread and self._thread.is_alive():
                 return False
-            todo = self.pending(games)
+            todo = self.pending(games, force=force)
             self._status = EnrichmentStatus(running=bool(todo), total=len(todo),
                                             message="fetching" if todo else "cache up to date")
             if not todo:

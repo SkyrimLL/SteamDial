@@ -150,3 +150,19 @@ class ThumbnailCache:
         with self._lock:
             checked_at = self._missing.get(appid)
         return checked_at is None or (time.time() - checked_at) > retry_missing_after_s
+
+    def invalidate_all(self) -> None:
+        """Clears our own downloaded images and the missing-ledger (not manual overrides), so
+        every appid is re-fetched from the provider next time it's requested. Used by Rescan.
+        """
+        with self._lock:
+            for path in self.directory.glob("*.jpg"):
+                try:
+                    path.unlink()
+                except OSError as exc:
+                    log.warning("Could not remove cached thumbnail %s: %s", path, exc)
+            self._missing.clear()
+            try:
+                self._flush_missing()
+            except OSError as exc:
+                log.warning("Failed to reset thumbnail missing-ledger: %s", exc)

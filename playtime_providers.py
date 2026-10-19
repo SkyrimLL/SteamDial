@@ -39,6 +39,14 @@ def title_variants(title: str) -> list[str]:
     stripped = _EDITION_SUFFIX.sub("", cleaned).strip()
     if stripped and stripped not in variants:
         variants.append(stripped)
+    # Stylized ALL-CAPS Steam titles (e.g. "SUCCUBUS") throw off HLTB's search ranking, which
+    # indexes most games in title case; re-casing surfaces the right entry instead of a
+    # same-cased decoy (e.g. a short "Prologue"/demo listing).
+    for variant in list(variants):
+        if variant.isupper():
+            titlecased = " ".join(word.capitalize() for word in variant.split(" "))
+            if titlecased not in variants:
+                variants.append(titlecased)
     return variants
 
 
@@ -54,6 +62,11 @@ class HowLongToBeatProvider:
         self._min_similarity = min_similarity
 
     def lookup(self, appid: int, title: str) -> Optional[PlaytimeEstimate]:
+        # Collect candidates across all title variants rather than stopping at the first
+        # variant with an acceptable match: a stylized/ALL-CAPS title can return a decoy
+        # (e.g. a short prologue/demo) that still clears the similarity threshold, while a
+        # later variant would have found the real game with a much higher similarity.
+        best = None
         for variant in title_variants(title):
             try:
                 results = self._client.search(variant)
@@ -61,20 +74,23 @@ class HowLongToBeatProvider:
                 raise LookupUnavailable(f"HLTB error: {exc}") from exc
             if results is None:
                 raise LookupUnavailable("HLTB request failed")
-            best = max(results, key=lambda r: r.similarity, default=None)
-            if best is None or best.similarity < self._min_similarity:
-                continue
-            main = best.main_story or best.main_extra or best.completionist
-            if not main:
-                continue
-            return PlaytimeEstimate(
-                main_hours=round(float(main), 1),
-                extra_hours=round(float(best.main_extra), 1) if best.main_extra else None,
-                completionist_hours=round(float(best.completionist), 1) if best.completionist else None,
-                source=self.name,
-                matched_name=best.game_name,
-            )
-        return None
+            candidate = max(results, key=lambda r: r.similarity, default=None)
+            if candidate is not None and (best is None or candidate.similarity > best.similarity):
+                best = candidate
+            if best is not None and best.similarity >= 1.0:
+                break  # exact match found, no point trying further variants
+        if best is None or best.similarity < self._min_similarity:
+            return None
+        main = best.main_story or best.main_extra or best.completionist
+        if not main:
+            return None
+        return PlaytimeEstimate(
+            main_hours=round(float(main), 1),
+            extra_hours=round(float(best.main_extra), 1) if best.main_extra else None,
+            completionist_hours=round(float(best.completionist), 1) if best.completionist else None,
+            source=self.name,
+            matched_name=best.game_name,
+        )
 
 
 class SteamSpyProvider:

@@ -33,6 +33,14 @@ class LibraryService:
             self._games = games
         return games
 
+    def add_new_games(self, new_games: List[SteamGame]) -> List[SteamGame]:
+        """Merges previously-unknown games into the loaded library without a full rescan."""
+        with self._lock:
+            known = {g.appid for g in self._games}
+            added = [g for g in new_games if g.appid not in known]
+            self._games = sorted(self._games + added, key=lambda g: g.name.lower())
+            return added
+
     @property
     def games(self) -> List[SteamGame]:
         with self._lock:

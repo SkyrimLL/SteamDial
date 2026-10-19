@@ -38,13 +38,22 @@
         </div>
         <div class="flex items-center gap-3 text-sm">
           <span id="counts" class="text-slate-400"></span>
-          <button id="rescan" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">
-            <!-- Lucide "activity" icon (https://lucide.dev/icons/activity), vendored inline — no CDN/runtime dependency -->
+          <button id="scan-new-games" type="button" title="Add the games found since the last rescan"
+                  class="hidden items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-400/40 text-orange-300 disabled:opacity-40 disabled:cursor-not-allowed">
+            <!-- Lucide "sparkles" icon (https://lucide.dev/icons/sparkles), vendored inline — no CDN/runtime dependency -->
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
+              <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+            </svg>
+            <span>Scan new games (<span id="new-games-count">0</span>)</span>
+          </button>
+          <button id="rescan" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-40 disabled:cursor-not-allowed">
+            <!-- Lucide "activity" icon (https://lucide.dev/icons/activity), vendored inline — no CDN/runtime dependency -->
+            <svg id="rescan-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
               <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
             </svg>
-            <span>Rescan</span>
+            <span id="rescan-label">Rescan</span>
           </button>
           <button id="settings-btn" type="button" title="Settings" aria-label="Settings"
                   class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">
@@ -693,6 +702,7 @@
       const data = await res.json();
       state.games = data.games;
       showProgress(data.status);
+      updateNewGamesButton(data.status.new_games_count || 0);
       render();
       schedulePoll(data.status.running);
     } catch (e) {
@@ -703,6 +713,23 @@
   function schedulePoll(running) {
     clearTimeout(state.pollTimer);
     if (running) state.pollTimer = setTimeout(loadGames, 4000);
+  }
+
+  function updateNewGamesButton(count) {
+    const btn = $('scan-new-games');
+    $('new-games-count').textContent = count;
+    btn.classList.toggle('hidden', count <= 0);
+    btn.classList.toggle('flex', count > 0);
+  }
+
+  async function checkNewGames() {
+    try {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+      updateNewGamesButton(data.new_games_count || 0);
+    } catch (e) {
+      // Background check only; a failed poll shouldn't disrupt the UI.
+    }
   }
 
   async function recommend(params) {
@@ -763,10 +790,28 @@
   });
   $('hide-completed').addEventListener('change', () => { savePrefs(); render(); });
   $('rescan').addEventListener('click', async () => {
-    if (!confirm('Rescan your Steam library now? This may take a while.')) return;
+    if (!confirm('Rescan your entire Steam library now? This may take a while.')) return;
     $('rescan').disabled = true;
+    $('rescan-icon').classList.add('animate-spin');
+    $('rescan-label').textContent = 'Scanning\u2026';
+    // Rescan runs synchronously server-side, so poll-driven showProgress() won't fire until it
+    // returns; show an indeterminate message up front so the packaged (windowed, console-less) app
+    // doesn't look frozen while it works.
+    $('progress').classList.remove('hidden');
+    $('progress-bar').style.width = '100%';
+    $('progress-count').textContent = '';
+    $('progress-label').textContent = 'Scanning your library\u2026';
     try { await fetch('/api/rescan', { method: 'POST' }); await loadGames(); }
-    finally { $('rescan').disabled = false; }
+    finally {
+      $('rescan').disabled = false;
+      $('rescan-icon').classList.remove('animate-spin');
+      $('rescan-label').textContent = 'Rescan';
+    }
+  });
+  $('scan-new-games').addEventListener('click', async () => {
+    $('scan-new-games').disabled = true;
+    try { await fetch('/api/scan-new-games', { method: 'POST' }); await loadGames(); }
+    finally { $('scan-new-games').disabled = false; }
   });
 
   // --- Settings modal: edit .env values (Steam Web API key, SteamGridDB API key). ---
@@ -827,6 +872,8 @@
 
   loadPrefs();
   loadGames();
+  checkNewGames();
+  setInterval(checkNewGames, 60000);
 })();
 </script>
 </body>

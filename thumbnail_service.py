@@ -39,6 +39,10 @@ class ThumbnailService:
         """Saves a user-uploaded image as the manual override thumbnail for `appid`."""
         return self._cache.store_override(appid, content)
 
+    def invalidate_cache(self) -> None:
+        """Forces every appid to be re-fetched from the provider next time it's displayed."""
+        self._cache.invalidate_all()
+
     def resolve(self, appid: int) -> Optional[Path]:
         found = self.local_only(appid)
         if found is not None:

@@ -5,6 +5,7 @@ Run:  python steamdial.py [--steam-root F:\\Steam] [--port 5000] [--browser]
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -20,6 +21,7 @@ from completionist_overrides import CompletionistOverrides
 from enrichment import PlaytimeEnrichmentService
 from library_service import LibraryService
 from missing_playtime_log import MissingPlaytimeLogger
+from new_games_watcher import NewGamesWatcher
 from owned_games_cache import OwnedGamesCache
 from playtime_providers import default_provider
 from recommender import PRESETS, PRESETS_BY_KEY, GameRecommender, TimeBudgetParser
@@ -60,6 +62,7 @@ def create_app(
     actual_playtime: ActualPlaytimeService,
     owned_games_cache: OwnedGamesCache,
     user_overrides: UserOverrides,
+    new_games_watcher: NewGamesWatcher,
     allow_fetch: bool = True,
 ) -> Flask:
     app = Flask(
@@ -78,11 +81,15 @@ def create_app(
         games = library.game_dicts()
         for g in games:
             g["has_thumbnail"] = thumbnails.local_only(g["appid"]) is not None
-        return jsonify(games=games, status=enrichment.status())
+        status = enrichment.status()
+        status["new_games_count"] = new_games_watcher.status()["count"]
+        return jsonify(games=games, status=status)
 
     @app.get("/api/status")
     def api_status():
-        return jsonify(enrichment.status())
+        status = enrichment.status()
+        status["new_games_count"] = new_games_watcher.status()["count"]
+        return jsonify(status)
 
     @app.get("/api/settings")
     def api_settings_get():
@@ -107,12 +114,27 @@ def create_app(
 
     @app.post("/api/rescan")
     def api_rescan():
+        """Full rescan: re-discovers every game and force-refreshes cached times/thumbnails from
+        scratch, bypassing normal cache-staleness checks. Manual overrides are left untouched.
+        """
         games = library.rescan()
+        thumbnails.invalidate_cache()
         if allow_fetch:
-            enrichment.start(games)
+            enrichment.start(games, force=True)
             owned_games_cache.refresh_async()
         missing_playtime_log.refresh_async(games)
+        new_games_watcher.clear()
         return jsonify(count=len(games), status=enrichment.status())
+
+    @app.post("/api/scan-new-games")
+    def api_scan_new_games():
+        """Lighter-weight scan: only adds games the background watcher already flagged as new."""
+        added = library.add_new_games(new_games_watcher.new_games())
+        new_games_watcher.clear()
+        if allow_fetch:
+            enrichment.start(library.games)
+        missing_playtime_log.refresh_async(library.games)
+        return jsonify(count=len(added), status=enrichment.status())
 
     @app.get("/api/recommend")
     def api_recommend():
@@ -238,9 +260,12 @@ def main() -> None:
         owned_games_cache.refresh_async()
     missing_playtime_log.refresh_async(games)
 
+    new_games_watcher = NewGamesWatcher(library, scanner, owned_games_cache if not args.no_fetch else None)
+    new_games_watcher.start()
+
     app = create_app(library, scanner, enrichment, TimeBudgetParser(), GameRecommender(), thumbnails,
                      missing_playtime_log, actual_playtime, owned_games_cache, user_overrides,
-                     allow_fetch=not args.no_fetch)
+                     new_games_watcher, allow_fetch=not args.no_fetch)
 
     if args.browser:
         log.info("Steam Dial running at http://%s:%d", args.host, args.port)
@@ -250,6 +275,27 @@ def main() -> None:
 
 
 DEFAULT_ICON = RESOURCE_DIR / "assets" / "app-icon.ico"
+WINDOW_STATE_PATH = DATA_DIR / "window_state.json"
+WINDOW_MIN_SIZE = (900, 600)
+
+
+def _load_window_size() -> tuple[int, int]:
+    try:
+        state = json.loads(WINDOW_STATE_PATH.read_text(encoding="utf-8"))
+        width, height = int(state["width"]), int(state["height"])
+        return max(width, WINDOW_MIN_SIZE[0]), max(height, WINDOW_MIN_SIZE[1])
+    except Exception:
+        return 1280, 860
+
+
+def _save_window_size(window) -> None:
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        WINDOW_STATE_PATH.write_text(
+            json.dumps({"width": window.width, "height": window.height}), encoding="utf-8",
+        )
+    except Exception:
+        log.exception("Failed to save window size")
 
 
 def _run_in_window(app: Flask, host: str, port: int) -> None:
@@ -267,13 +313,20 @@ def _run_in_window(app: Flask, host: str, port: int) -> None:
     server.start()
     log.info("Steam Dial running in its own window (http://%s:%d)", host, port)
     title = "Steam Dial"
+    width, height = _load_window_size()
     window = webview.create_window(
-        title, f"http://{host}:{port}", width=1280, height=860, min_size=(900, 600), background_color="#0e141b",
+        title, f"http://{host}:{port}", width=width, height=height, min_size=WINDOW_MIN_SIZE,
+        background_color="#0e141b",
     )
-    if window is not None and os.name == "nt":
-        window.events.shown += lambda: _enable_dark_title_bar(title)
-        window.events.shown += lambda: _set_window_icon(title, DEFAULT_ICON)
-    webview.start()
+    if window is not None:
+        window.events.closing += lambda: _save_window_size(window)
+        if os.name == "nt":
+            window.events.shown += lambda: _enable_dark_title_bar(title)
+            window.events.shown += lambda: _set_window_icon(title, DEFAULT_ICON)
+    # private_mode defaults to True, which gives WebView2 a fresh, auto-deleted profile every
+    # launch (PyInstaller onefile's changing _MEIPASS makes this worse) — localStorage prefs
+    # like sort/filter selections would never survive a restart without this.
+    webview.start(private_mode=False, storage_path=str(DATA_DIR / "webview_cache"))
 
 
 def _enable_dark_title_bar(window_title: str) -> None:

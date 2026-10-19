@@ -74,6 +74,12 @@ class OwnedGamesCache:
             return
         threading.Thread(target=self._refresh, name="owned-games-fetch", daemon=True).start()
 
+    def refresh_now(self) -> None:
+        """Synchronous version of `refresh_async()`, for callers already on a background thread."""
+        if self._client is None:
+            return
+        self._refresh()
+
     def _refresh(self) -> None:
         try:
             games = self._client.fetch_owned_games()  # type: ignore[union-attr]
