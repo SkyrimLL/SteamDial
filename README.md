@@ -10,7 +10,7 @@ It can also show you only much your play time compares to the estimated play tim
 It runs a small Flask app served either in its own native window (via `pywebview`) or in
 a regular browser tab, and never writes to your Steam installation.
 
-<img width="1964" height="1673" alt="screenshot" src="https://github.com/SkyrimLL/SteamDial/blob/e29394668c12e3fbfbb55056db5314a6c60341b9/docs/screenshot.jpg" />
+<img width="1964" height="1673" alt="screenshot" src="https://github.com/SkyrimLL/SteamDial/blob/5f7e387f350a914509b0afbde18420efaca88bb5/docs/screenshot.jpg" />
 
 
 
