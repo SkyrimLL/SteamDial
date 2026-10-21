@@ -153,7 +153,7 @@ python steamdial.py --browser
 | [owned_games_cache.py](owned_games_cache.py) | Persists the Steam Web API's owned-games catalog to [owned_games_cache.json](data/owned_games_cache.json), loaded offline at startup and refreshed on rescan |
 | [actual_playtime_service.py](actual_playtime_service.py) | Read-only per-game view over the owned-games catalog (real playtime, icon URL) |
 | [library_service.py](library_service.py) | Combines scanned games with cached playtime data and real playtime for the API/UI |
-| [new_games_watcher.py](new_games_watcher.py) | Background watcher that periodically re-checks the Steam Web API/local files and flags newly found games, powering the "Scan new games" button |
+| [new_games_watcher.py](new_games_watcher.py) | Background watcher that re-checks the Steam Web API/local files right after startup, after each rescan, and every 10 minutes, flagging newly found games to power the "Scan new games" button |
 | [cache_manager.py](cache_manager.py) | Thread-safe JSON cache for playtime lookups, stored in the project folder |
 | [enrichment.py](enrichment.py) | Background worker that fills the cache with playtime estimates |
 | [missing_playtime_log.py](missing_playtime_log.py) | Writes [missing_completionist.json](data/missing_completionist.json), listing games with no completionist playtime estimate |

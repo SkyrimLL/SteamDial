@@ -42,6 +42,7 @@ class NewGamesWatcher:
         self._interval = interval_s
         self._sleep = sleep
         self._lock = threading.Lock()
+        self._check_lock = threading.Lock()
         self._status = NewGamesStatus()
         self._new_games: List[SteamGame] = []
         self._stop = threading.Event()
@@ -73,20 +74,31 @@ class NewGamesWatcher:
     def check_now(self) -> int:
         """Refreshes owned-games from the Steam Web API, re-scans local files, and records any
         appids not currently loaded in the library. Returns the new-games count."""
-        if self._owned_games_cache is not None:
-            self._owned_games_cache.refresh_now()
-        candidates = self._scanner.scan()
-        known = {g.appid for g in self._library.games}
-        found = [g for g in candidates if g.appid not in known]
-        with self._lock:
-            self._new_games = found
-            self._status = NewGamesStatus(count=len(found), checked_at=time.time())
-        return len(found)
+        with self._check_lock:
+            if self._owned_games_cache is not None:
+                self._owned_games_cache.refresh_now()
+            candidates = self._scanner.scan()
+            known = {g.appid for g in self._library.games}
+            found = [g for g in candidates if g.appid not in known]
+            with self._lock:
+                self._new_games = found
+                self._status = NewGamesStatus(count=len(found), checked_at=time.time())
+            return len(found)
+
+    def check_async(self) -> None:
+        """Runs `check_now()` on a background thread (e.g. right after a full rescan, whose
+        scan used the owned-games list as it was *before* this refresh)."""
+        threading.Thread(target=self._safe_check, name="new-games-check", daemon=True).start()
+
+    def _safe_check(self) -> None:
+        try:
+            self.check_now()
+        except Exception:
+            log.exception("New-games check failed")
 
     def _run(self) -> None:
-        # Wait out the first interval so this doesn't duplicate the rescan done at startup.
+        # Check immediately: the startup scan used the owned-games list persisted on disk, so
+        # games bought since the last run only show up once that list is refreshed here.
+        self._safe_check()
         while not self._stop.wait(self._interval):
-            try:
-                self.check_now()
-            except Exception:
-                log.exception("New-games check failed")
+            self._safe_check()

@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
 import sys
 import threading
@@ -24,7 +25,7 @@ from missing_playtime_log import MissingPlaytimeLogger
 from new_games_watcher import NewGamesWatcher
 from owned_games_cache import OwnedGamesCache
 from playtime_providers import default_provider
-from recommender import PRESETS, PRESETS_BY_KEY, GameRecommender, TimeBudgetParser
+from recommender import PRESETS, PRESETS_BY_KEY, GameRecommender, TimeBudgetParser, TimeRange
 from steam_parser import SteamLibraryScanner
 from steam_web_api import SteamWebApiClient, resolve_steam_id64
 from thumbnail_cache import ThumbnailCache
@@ -60,7 +61,6 @@ def create_app(
     thumbnails: ThumbnailService,
     missing_playtime_log: MissingPlaytimeLogger,
     actual_playtime: ActualPlaytimeService,
-    owned_games_cache: OwnedGamesCache,
     user_overrides: UserOverrides,
     new_games_watcher: NewGamesWatcher,
     allow_fetch: bool = True,
@@ -121,9 +121,12 @@ def create_app(
         thumbnails.invalidate_cache()
         if allow_fetch:
             enrichment.start(games, force=True)
-            owned_games_cache.refresh_async()
         missing_playtime_log.refresh_async(games)
         new_games_watcher.clear()
+        if allow_fetch:
+            # The rescan above used the previously-cached owned-games list; refresh it and flag
+            # anything newly owned via the "Scan new games" button.
+            new_games_watcher.check_async()
         return jsonify(count=len(games), status=enrichment.status())
 
     @app.post("/api/scan-new-games")
@@ -139,6 +142,7 @@ def create_app(
     @app.get("/api/recommend")
     def api_recommend():
         preset_key = request.args.get("preset", "").strip()
+        max_hours_param = request.args.get("max_hours", "").strip()
         query = request.args.get("q", "").strip()[:200]
         metric = request.args.get("metric", "completionist_hours").strip()
         include_hidden = request.args.get("include_hidden", "0").strip() == "1"
@@ -149,6 +153,17 @@ def create_app(
             if preset is None:
                 return jsonify(error=f"Unknown preset '{preset_key}'"), 400
             time_range = preset.range
+        elif max_hours_param:
+            # Driven by the "time budget" slider: an explicit upper bound rather than parsed text.
+            # The slider supplies its own display label since it knows the configured scale top.
+            try:
+                max_hours = math.inf if max_hours_param.lower() == "inf" else float(max_hours_param)
+            except ValueError:
+                return jsonify(error=f"Invalid max_hours value '{max_hours_param}'"), 400
+            if not math.isinf(max_hours) and max_hours <= 0:
+                return jsonify(error="max_hours must be greater than 0"), 400
+            label = request.args.get("label", "").strip()[:60] or f"Up to {max_hours:g} hours"
+            time_range = TimeRange(0, max_hours, label)
         else:
             time_range = parser.parse(query)
             if time_range is None:
@@ -257,14 +272,14 @@ def main() -> None:
     games = library.rescan()
     if not args.no_fetch:
         enrichment.start(games)
-        owned_games_cache.refresh_async()
     missing_playtime_log.refresh_async(games)
 
+    # Its first check (run immediately on start) also refreshes the owned-games list from the Steam Web API.
     new_games_watcher = NewGamesWatcher(library, scanner, owned_games_cache if not args.no_fetch else None)
     new_games_watcher.start()
 
     app = create_app(library, scanner, enrichment, TimeBudgetParser(), GameRecommender(), thumbnails,
-                     missing_playtime_log, actual_playtime, owned_games_cache, user_overrides,
+                     missing_playtime_log, actual_playtime, user_overrides,
                      new_games_watcher, allow_fetch=not args.no_fetch)
 
     if args.browser:

@@ -37,8 +37,9 @@ Paste the key(s) in, hit **Save**, then restart Steam Dial for them to take effe
 
 ## Running a scan
 
-Steam Dial scans your library automatically on startup, and also checks the Steam Web API
-and local files in the background every few minutes for newly bought games. When new games
+Steam Dial scans your library automatically on startup, then right away (and every few
+minutes after that) checks the Steam Web API and local files in the background for newly
+bought games. When new games
 are found, an orange **Scan new games** button appears next to **Rescan**; click it to add
 just those games without re-scanning your whole library. Use **Rescan** instead if you've
 installed/uninstalled/hidden games and want to refresh the full list — this also re-checks
@@ -64,8 +65,9 @@ image always takes priority over anything Steam Dial would have found on its own
   sorting is based on.
 - **Include hidden games** — also show games you've hidden in your Steam library.
 - **"How much time do you have?"** — pick a preset (Quick Session, Weekend Game, Epic Long
-  Haul) or type a time budget in plain language (e.g. "under 4 hours", "a weekend game") to
-  get a shortlist of recommendations.
+  Haul), type a time budget in plain language (e.g. "under 4 hours", "a weekend game"), or
+  drag the slider to update your recommendations. The slider ranges from less than 1 hour
+  through budgets of up to 60 hours, with a final open-ended **More than 60 hours** option.
 
 For install instructions, command-line flags, and a breakdown of the codebase, see
 [docs/TECHnICAL_DETAILS.md](docs/TECHNICAL_DETAILS.md).

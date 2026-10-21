@@ -119,10 +119,30 @@
       <p class="text-sm text-slate-400 mb-4">Pick a preset or describe it, e.g. “I only have 3 hours tonight” or “between 10 and 15 hours”.</p>
       <div class="flex flex-wrap gap-3 mb-4">
         {% for p in presets %}
-        <button class="preset group text-left px-4 py-3 rounded-xl bg-slate-900/70 hover:bg-sky-600/30 border border-white/10 hover:border-sky-400/50 transition"
+        <button class="preset group flex items-center gap-3 text-left px-4 py-3 rounded-xl bg-slate-900/70 hover:bg-sky-600/30 border border-white/10 hover:border-sky-400/50 transition"
                 data-preset="{{ p.key }}">
-          <div class="font-semibold">{{ p.title }}</div>
-          <div class="text-xs text-slate-400 group-hover:text-slate-300">{{ p.description }} · {{ p.range.label }}</div>
+          {% if p.key == "short" %}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 shrink-0 text-sky-300" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 6v6l4 2"/>
+          </svg>
+          {% elif p.key == "weekend" %}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 shrink-0 text-sky-300" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>
+          </svg>
+          {% elif p.key == "epic" %}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 shrink-0 text-sky-300" aria-hidden="true">
+            <path d="m8 3 4 8 5-5 5 13H2L8 3z"/>
+          </svg>
+          {% endif %}
+          <div>
+            <div class="font-semibold">{{ p.title }}</div>
+            <div class="text-xs text-slate-400 group-hover:text-slate-300">{{ p.description }} · {{ p.range.label }}</div>
+          </div>
         </button>
         {% endfor %}
       </div>
@@ -131,6 +151,14 @@
                class="flex-1 px-4 py-2 rounded-lg bg-slate-900 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500">
         <button class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 font-medium">Recommend</button>
       </form>
+      <div class="mt-4">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span>…or drag the slider</span>
+          <span id="budget-slider-label" class="font-medium text-slate-200"></span>
+        </div>
+        <input id="budget-slider" type="range" min="0" step="1" value="0"
+               class="w-full accent-sky-500 cursor-pointer">
+      </div>
       <div id="rec-banner" class="hidden mt-4 flex items-center justify-between gap-3 text-sm px-4 py-2 rounded-lg bg-sky-500/10 border border-sky-500/30">
         <span id="rec-text"></span>
         <button id="rec-clear" class="text-sky-300 hover:text-white">Show full library ✕</button>
@@ -298,6 +326,12 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const state = { games: [], recommended: null, pollTimer: null };
+
+  // Top of the time-budget slider's scale, in hours. Bump this if the top step ("more than N
+  // hours") needs to move — the slider, its labels, and the step count all derive from it.
+  const MAX_BUDGET_HOURS = 60;
+  // One extra step beyond MAX_BUDGET_HOURS represents an open-ended "more than N hours" budget.
+  const BUDGET_SLIDER_MAX = MAX_BUDGET_HOURS + 1;
 
   // Remember the user's sort/filter selections across app restarts.
   const PREFS_KEY = 'steamdial.prefs';
@@ -758,9 +792,44 @@
     });
   }
 
+  // Time-budget slider: step N (1..MAX_BUDGET_HOURS) means "up to N hours", step 0 is "less than
+  // 1 hour", and the top step is an open-ended "more than MAX_BUDGET_HOURS hours" (no upper cap).
+  function budgetSliderHours(step) {
+    if (step <= 0) return 1;
+    if (step >= BUDGET_SLIDER_MAX) return Infinity;
+    return step;
+  }
+
+  function budgetSliderLabel(step) {
+    if (step <= 0) return 'Less than 1 hour';
+    if (step >= BUDGET_SLIDER_MAX) return `More than ${MAX_BUDGET_HOURS} hours`;
+    return `Up to ${step} hour${step === 1 ? '' : 's'}`;
+  }
+
+  function updateBudgetSliderLabel() {
+    $('budget-slider-label').textContent = budgetSliderLabel(Number($('budget-slider').value));
+  }
+
+  function resetBudgetSlider() {
+    $('budget-slider').value = BUDGET_SLIDER_MAX;
+    updateBudgetSliderLabel();
+  }
+
+  let budgetSliderTimer = null;
+  function recommendFromBudgetSlider() {
+    const step = Number($('budget-slider').value);
+    const hours = budgetSliderHours(step);
+    setActivePreset(null);
+    recommend({
+      max_hours: Number.isFinite(hours) ? String(hours) : 'inf',
+      label: budgetSliderLabel(step),
+    });
+  }
+
   document.querySelectorAll('.preset').forEach((btn) =>
     btn.addEventListener('click', () => {
       setActivePreset(btn.dataset.preset);
+      resetBudgetSlider();
       recommend({ preset: btn.dataset.preset });
     }));
   $('nl-form').addEventListener('submit', (e) => {
@@ -768,12 +837,23 @@
     const q = $('nl').value.trim();
     if (q) {
       setActivePreset(null);
+      resetBudgetSlider();
       recommend({ q });
     }
+  });
+  $('budget-slider').addEventListener('input', () => {
+    updateBudgetSliderLabel();
+    clearTimeout(budgetSliderTimer);
+    budgetSliderTimer = setTimeout(recommendFromBudgetSlider, 250);
+  });
+  $('budget-slider').addEventListener('change', () => {
+    clearTimeout(budgetSliderTimer);
+    recommendFromBudgetSlider();
   });
   $('rec-clear').addEventListener('click', () => {
     state.recommended = null;
     setActivePreset(null);
+    resetBudgetSlider();
     $('rec-banner').classList.add('hidden');
     render();
   });
@@ -870,10 +950,13 @@
     }
   });
 
+  $('budget-slider').max = String(BUDGET_SLIDER_MAX);
+  resetBudgetSlider();
+
   loadPrefs();
   loadGames();
   checkNewGames();
-  setInterval(checkNewGames, 60000);
+  setInterval(checkNewGames, 15000);
 })();
 </script>
 </body>
