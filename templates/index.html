@@ -8,6 +8,11 @@
   <style>
     body { background: radial-gradient(ellipse at top, #1b2838 0%, #0e141b 60%); }
     .card-img { aspect-ratio: 460 / 215; }
+    .card-actions { opacity: 0; pointer-events: none; }
+    .group:hover .card-actions, .group:focus-within .card-actions { opacity: 1; pointer-events: auto; }
+    @media (hover: none) {
+      .card-actions { opacity: 1; pointer-events: auto; }
+    }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .preset-active { background-color: rgba(2, 132, 199, 0.35); border-color: #38bdf8; box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.5); }
 
@@ -175,6 +180,12 @@
       <div class="relative">
         <img class="card-img w-full object-cover bg-slate-800" loading="lazy" alt="">
         <div class="placeholder hidden card-img w-full bg-gradient-to-br from-slate-800 to-slate-700"></div>
+        <div class="card-actions absolute bottom-0 inset-x-0 flex items-center justify-center gap-2 p-3 bg-slate-950/90 transition">
+          <a class="steam-link flex-1 text-center text-xs font-semibold px-2 py-2 rounded-lg bg-sky-700 hover:bg-sky-600 focus-visible:outline-2 focus-visible:outline-sky-400 focus-visible:outline-offset-2"
+             title="Open in Steam">Steam</a>
+          <a class="hltb-link flex-1 text-center text-xs font-semibold px-2 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 focus-visible:outline-2 focus-visible:outline-sky-400 focus-visible:outline-offset-2"
+             target="_blank" rel="noopener noreferrer" title="Open in HowLongToBeat">HowLongToBeat</a>
+        </div>
         <div class="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
           <span class="badge text-[11px] font-semibold px-2 py-0.5 rounded-full"></span>
         </div>
@@ -275,6 +286,8 @@
           <input id="edit-completionist-hours" type="number" min="0" step="0.1" placeholder="e.g. 25.5"
                  class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm">
           <p id="edit-completionist-current" class="text-xs text-slate-500 mt-1"></p>
+          <a id="edit-completionist-search" href="#" target="_blank" rel="noopener noreferrer"
+             class="inline-block text-xs text-sky-400 hover:text-sky-300 hover:underline mt-1">Search average completion time &#8599;</a>
         </div>
       </div>
       <p id="edit-error" class="hidden mt-3 text-sm text-rose-300"></p>
@@ -434,8 +447,12 @@
                     g.extra_hours && `Main + extras: ${fmtHours(g.extra_hours)}`,
                     g.completionist_hours && `Completionist: ${fmtHours(g.completionist_hours)}`].filter(Boolean).join('\n');
     }
-    node.addEventListener('click', () => { window.location.href = `steam://nav/games/details/${g.appid}`; });
-    node.style.cursor = 'pointer';
+    const steamLink = node.querySelector('.steam-link');
+    steamLink.href = `steam://nav/games/details/${g.appid}`;
+    steamLink.setAttribute('aria-label', `Open ${g.name} in Steam`);
+    const hltbLink = node.querySelector('.hltb-link');
+    hltbLink.href = `https://howlongtobeat.com/?q=${encodeURIComponent(g.name)}`;
+    hltbLink.setAttribute('aria-label', `Open ${g.name} in HowLongToBeat`);
     node.querySelector('.thumb-edit').addEventListener('click', (e) => {
       e.stopPropagation();
       thumbOpen(g.appid, g.name);
@@ -595,13 +612,13 @@
         const res = await fetch(`/api/thumbnail/${appid}/override`, { method: 'POST', body: form });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Upload failed');
-        document.querySelectorAll(`.group[data-appid="${appid}"]`).forEach((card) => {
-          const img = card.querySelector('img');
-          img.onerror = null;
-          img.classList.remove('hidden');
-          img.src = `/thumb/${appid}?v=${Date.now()}`;
-          card.querySelector('.placeholder').classList.add('hidden');
+        [state.games, state.recommended ?? []].forEach((games) => {
+          games.filter((g) => g.appid === appid).forEach((g) => {
+            g.thumbnail = data.thumbnail;
+            g.has_thumbnail = true;
+          });
         });
+        render();
         thumbClose();
       } catch (e) {
         thumbModal.errorEl.textContent = e.message;
@@ -615,6 +632,7 @@
   const editModal = {
     el: $('edit-modal'), nameEl: $('edit-modal-name'), completed: $('edit-completed'), hidden: $('edit-hidden'),
     hoursInput: $('edit-completionist-hours'), currentEl: $('edit-completionist-current'),
+    searchLink: $('edit-completionist-search'),
     errorEl: $('edit-error'), saveBtn: $('edit-save'), appid: null,
   };
 
@@ -631,6 +649,8 @@
     editModal.hoursInput.value = g.completionist_override_hours ?? '';
     const auto = g.playtime_source !== 'manual' ? g.completionist_hours : null;
     editModal.currentEl.textContent = auto != null ? `Current estimate: ${fmtHours(auto)}` : 'No completionist estimate on file.';
+    const query = `What is the average completion time for ${g.name}`;
+    editModal.searchLink.href = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
     editModal.errorEl.classList.add('hidden');
     editModal.el.classList.remove('hidden');
     editModal.el.classList.add('flex');

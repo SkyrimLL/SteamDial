@@ -46,12 +46,23 @@ installed/uninstalled/hidden games and want to refresh the full list — this al
 for new playtime estimates and artwork in the background (shown by the progress bar under
 the search bar).
 
+## Opening games
+
+Hover over a game card to reveal **Steam** and **HowLongToBeat** buttons over its artwork.
+**Steam** opens the game's library page in the Steam client; **HowLongToBeat** opens a
+search for the game in your browser. The buttons also appear when tabbing into a card
+with the keyboard, and stay visible on touch devices. Clicking elsewhere on a card no
+longer opens Steam.
+
 ## Fixing missing thumbnails
 
 Hover over any game card and click the small pencil icon on its artwork to open the
 thumbnail editor. Pick an image from your computer, pan and zoom it to fit, then save — your
 image always takes priority over anything Steam Dial would have found on its own. Use the
 **No thumbnail** filter (see below) to quickly find every game still missing artwork.
+Saved replacements persist across sorting, filtering, recommendations, rescans, and restarts.
+They are stored in `thumbnails/overrides/` beside the script (or executable); replacing an
+image updates its URL so the browser does not reuse previously cached artwork.
 
 ## Sorting and filtering
 

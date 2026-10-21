@@ -76,11 +76,23 @@ def create_app(
     def index():
         return render_template("index.html", presets=PRESETS)
 
+    def thumbnail_url(appid: int, path: Path | None) -> str:
+        url = f"/thumb/{appid}"
+        if path is not None:
+            stat = path.stat()
+            url += f"?v={stat.st_mtime_ns}-{stat.st_size}"
+        return url
+
+    def add_thumbnail_info(games: list[dict]) -> list[dict]:
+        for game in games:
+            path = thumbnails.local_only(game["appid"])
+            game["has_thumbnail"] = path is not None
+            game["thumbnail"] = thumbnail_url(game["appid"], path)
+        return games
+
     @app.get("/api/games")
     def api_games():
-        games = library.game_dicts()
-        for g in games:
-            g["has_thumbnail"] = thumbnails.local_only(g["appid"]) is not None
+        games = add_thumbnail_info(library.game_dicts())
         status = enrichment.status()
         status["new_games_count"] = new_games_watcher.status()["count"]
         return jsonify(games=games, status=status)
@@ -170,7 +182,7 @@ def create_app(
                 return jsonify(error="Couldn't understand that time budget. Try e.g. 'under 4 hours' "
                                      "or 'a weekend game'."), 400
         games = recommender.recommend(library.game_dicts(), time_range, metric=metric, include_hidden=include_hidden)
-        return jsonify(range=time_range.to_dict(), games=games)
+        return jsonify(range=time_range.to_dict(), games=add_thumbnail_info(games))
 
     @app.get("/thumb/<int:appid>")
     def thumbnail(appid: int):
@@ -179,7 +191,7 @@ def create_app(
         path = thumbnails.resolve(appid) if allow_fetch else thumbnails.local_only(appid)
         if path is None:
             abort(404)
-        return send_file(path, mimetype="image/jpeg", max_age=7 * 24 * 3600)
+        return send_file(path, mimetype="image/jpeg", max_age=0)
 
     @app.post("/api/thumbnail/<int:appid>/override")
     def upload_thumbnail_override(appid: int):
@@ -190,10 +202,13 @@ def create_app(
             return jsonify(error="No image file provided"), 400
         content = file.read()
         try:
-            thumbnails.set_override(appid, content)
+            path = thumbnails.set_override(appid, content)
         except ValueError as exc:
             return jsonify(error=str(exc)), 400
-        return jsonify(ok=True)
+        except OSError:
+            log.exception("Failed to save thumbnail override for app %s", appid)
+            return jsonify(error="Could not save the thumbnail. Check available disk space and folder permissions."), 500
+        return jsonify(ok=True, thumbnail=thumbnail_url(appid, path))
 
     @app.post("/api/game/<int:appid>/override")
     def api_game_override(appid: int):
