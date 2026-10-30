@@ -52,6 +52,16 @@
             </svg>
             <span>Scan new games (<span id="new-games-count">0</span>)</span>
           </button>
+          <button id="add-game" type="button" title="Add a local game that Steam doesn't track"
+                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-40 disabled:cursor-not-allowed">
+            <!-- Lucide "plus" icon (https://lucide.dev/icons/plus), vendored inline — no CDN/runtime dependency -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
+              <path d="M5 12h14"/>
+              <path d="M12 5v14"/>
+            </svg>
+            <span>Add a new game</span>
+          </button>
           <button id="rescan" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-40 disabled:cursor-not-allowed">
             <!-- Lucide "activity" icon (https://lucide.dev/icons/activity), vendored inline — no CDN/runtime dependency -->
             <svg id="rescan-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -88,6 +98,7 @@
           <option value="all">All games</option>
           <option value="installed">Installed</option>
           <option value="uninstalled">Not installed</option>
+          <option value="local">Local games (added by me)</option>
           <option value="no-playtime">No playtime data</option>
           <option value="no-thumbnail">No thumbnail</option>
         </select>
@@ -232,11 +243,6 @@
           </div>
           <div class="progress-label mt-1 text-[11px] text-slate-500"></div>
         </div>
-        <div class="no-progress hidden mt-2 flex items-center gap-1 text-[11px] text-slate-600 cursor-help"
-             title="Not in your Steam account's owned-games list (e.g. a demo, wishlist item, or refund), so real playtime can't be fetched.">
-          <div class="h-1.5 flex-1 rounded-full overflow-hidden bg-white/5" style="background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.08) 0 4px, transparent 4px 8px);"></div>
-          <span class="shrink-0">No Steam playtime data</span>
-        </div>
       </div>
     </article>
   </template>
@@ -273,10 +279,19 @@
         <button id="edit-modal-close" class="text-slate-400 hover:text-white text-xl leading-none shrink-0">&times;</button>
       </div>
       <div class="space-y-4">
-        <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-          <input id="edit-completed" type="checkbox" class="rounded border-white/20 bg-slate-900">
-          Mark as completed (outside Steam)
-        </label>
+        <div id="edit-title-row" class="hidden">
+          <label for="edit-title" class="block text-sm text-slate-400 mb-1">Game title</label>
+          <input id="edit-title" type="text" autocomplete="off"
+                 class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm">
+          <p class="text-xs text-slate-500 mt-1">Renaming looks the game's playtime estimate up again under the new title.</p>
+        </div>
+        <div>
+          <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+            <input id="edit-completed" type="checkbox" class="rounded border-white/20 bg-slate-900">
+            Mark as completed (outside Steam)
+          </label>
+          <p id="edit-completed-auto" class="hidden text-xs text-slate-500 mt-1"></p>
+        </div>
         <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
           <input id="edit-hidden" type="checkbox" class="rounded border-white/20 bg-slate-900">
           Hide this game (even if not hidden in Steam)
@@ -289,11 +304,41 @@
           <a id="edit-completionist-search" href="#" target="_blank" rel="noopener noreferrer"
              class="inline-block text-xs text-sky-400 hover:text-sky-300 hover:underline mt-1">Search average completion time &#8599;</a>
         </div>
+        <div>
+          <label for="edit-actual-hours" class="block text-sm text-slate-400 mb-1">Play time override (hours)</label>
+          <input id="edit-actual-hours" type="number" min="0" step="0.1" placeholder="e.g. 12"
+                 class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm">
+          <p id="edit-actual-current" class="text-xs text-slate-500 mt-1"></p>
+          <p class="text-xs text-slate-500 mt-1">For time played outside Steam's tracking (other stores, offline play). Leave empty to use Steam's figure.</p>
+        </div>
       </div>
       <p id="edit-error" class="hidden mt-3 text-sm text-rose-300"></p>
+      <div class="flex justify-between items-center gap-2 mt-5">
+        <button id="edit-delete" type="button"
+                class="hidden px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 disabled:opacity-40 disabled:cursor-not-allowed">Remove game</button>
+        <div class="flex justify-end gap-2 ml-auto">
+          <button id="edit-cancel" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Cancel</button>
+          <button id="edit-save" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 font-medium">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="add-game-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
+    <div class="w-full max-w-md rounded-xl bg-slate-900 border border-white/10 p-5" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-3 gap-3">
+        <h3 class="font-semibold">Add a new game</h3>
+        <button id="add-game-modal-close" class="text-slate-400 hover:text-white text-xl leading-none shrink-0">&times;</button>
+      </div>
+      <label for="add-game-name" class="block text-sm text-slate-400 mb-1">Game title</label>
+      <input id="add-game-name" type="text" autocomplete="off" placeholder="e.g. Disco Elysium"
+             class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm">
+      <p class="text-xs text-slate-500 mt-1.5">For local games Steam doesn't track. The title is all that's needed —
+        set its thumbnail, play time and the rest from the card's own buttons afterwards.</p>
+      <p id="add-game-error" class="hidden mt-3 text-sm text-rose-300"></p>
       <div class="flex justify-end gap-2 mt-5">
-        <button id="edit-cancel" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Cancel</button>
-        <button id="edit-save" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 font-medium">Save</button>
+        <button id="add-game-cancel" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Cancel</button>
+        <button id="add-game-save" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed font-medium">Add game</button>
       </div>
     </div>
   </div>
@@ -338,7 +383,7 @@
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
-  const state = { games: [], recommended: null, pollTimer: null };
+  const state = { games: [], recommended: null, pollTimer: null, thumbSeen: new Map(), thumbTimer: null };
 
   // Top of the time-budget slider's scale, in hours. Bump this if the top step ("more than N
   // hours") needs to move — the slider, its labels, and the step count all derive from it.
@@ -370,7 +415,10 @@
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* storage unavailable */ }
   }
 
-  const fmtHours = (h) => h == null ? null : (h < 1 ? `${Math.round(h * 60)} min` : `${h.toFixed(1).replace(/\.0$/, '')} h`);
+  const fmtHours = (h) => h == null ? null
+    : h <= 0 ? '0 h'
+    : h < 1 ? `${Math.round(h * 60)} min`
+    : `${h.toFixed(1).replace(/\.0$/, '')} h`;
   const metric = () => $('metric').value;
 
   function hoursText(g) {
@@ -380,26 +428,43 @@
     return `⏱ ${fmtHours(h)}`;
   }
 
+  // Games without recorded playtime (demos, refunds, titles missing from the owned-games list)
+  // are treated as never played, so their cards read "0 h played" like any other card.
+  function playedHours(g) {
+    return g.actual_hours ?? 0;
+  }
+
   function progressInfo(g) {
     const target = g[metric()];
     if (target == null || target <= 0) return null;
-    if (g.actual_hours == null) return { noData: true };
-    const pct = Math.max(0, Math.min(100, (g.actual_hours / target) * 100));
-    return { pct, diff: target - g.actual_hours };
+    const played = playedHours(g);
+    const pct = Math.max(0, Math.min(100, (played / target) * 100));
+    return { pct, diff: target - played };
   }
 
   // Hours remaining to reach the chosen completion metric; null when unknown.
   function timeLeft(g) {
     const target = g[metric()];
     if (target == null) return null;
-    return target - (g.actual_hours ?? 0);
+    return target - playedHours(g);
   }
 
-  // Hours remaining to reach the chosen completion metric; null when unknown.
-  function timeLeft(g) {
-    const target = g[metric()];
-    if (target == null) return null;
-    return target - (g.actual_hours ?? 0);
+  // `/thumb/<appid>` downloads missing artwork on first request, and cards fall back to Steam's CDN
+  // when it can't, so `has_thumbnail` from /api/games is only a pre-render guess: it says "already
+  // on disk", not "the card ends up blank". What the card actually displayed is the real answer, so
+  // observations recorded while rendering take precedence over the server's flag.
+  function hasThumbnail(g) {
+    const seen = state.thumbSeen.get(g.appid);
+    return seen === undefined ? !!g.has_thumbnail : seen;
+  }
+
+  function noteThumbnail(appid, loaded) {
+    if (state.thumbSeen.get(appid) === loaded) return;
+    state.thumbSeen.set(appid, loaded);
+    // Only the "No thumbnail" filter depends on this, and images resolve in bursts, so coalesce.
+    if ($('status').value !== 'no-thumbnail') return;
+    clearTimeout(state.thumbTimer);
+    state.thumbTimer = setTimeout(render, 200);
   }
 
   function buildCard(g) {
@@ -411,35 +476,37 @@
       img.classList.add('hidden');
       placeholder.classList.remove('hidden');
     };
-    img.src = g.thumbnail;
-    img.alt = g.name;
     let fallbackTried = false;
+    img.onload = () => noteThumbnail(g.appid, true);
     img.onerror = () => {
-      if (!fallbackTried) {
+      // Manually added games have a synthetic AppID, so Steam's CDN has nothing to fall back to.
+      if (!fallbackTried && !g.manual) {
         fallbackTried = true;
         img.src = `https://cdn.akamai.steamstatic.com/steam/apps/${g.appid}/capsule_231x87.jpg`;
       } else {
         img.onerror = null;
         showPlaceholder();
+        noteThumbnail(g.appid, false);
       }
     };
+    img.alt = g.name;
+    img.src = g.thumbnail;
     node.querySelector('.title').textContent = g.name;
     node.querySelector('.title').title = g.name;
     const badge = node.querySelector('.badge');
-    badge.textContent = g.installed ? 'Installed' : 'Not installed';
+    badge.textContent = g.manual ? 'Added manually' : g.installed ? 'Installed' : 'Not installed';
     badge.className += g.installed ? ' bg-emerald-500/90 text-emerald-950' : ' bg-slate-700/90 text-slate-200';
     node.querySelector('.completed-icon').classList.toggle('hidden', !g.completed);
     node.querySelector('.hours').textContent = hoursText(g);
     if (g.playtime_source) node.querySelector('.source').textContent = g.playtime_source;
     const progress = progressInfo(g);
-    if (progress && progress.noData) {
-      node.querySelector('.no-progress').classList.remove('hidden');
-    } else if (progress) {
+    if (progress) {
       node.querySelector('.progress-wrap').classList.remove('hidden');
       node.querySelector('.progress-bar').style.width = `${progress.pct}%`;
       node.querySelector('.progress-bar').classList.toggle('bg-emerald-500', progress.diff >= 0);
       node.querySelector('.progress-bar').classList.toggle('bg-amber-500', progress.diff < 0);
-      node.querySelector('.progress-label').textContent = `${fmtHours(g.actual_hours)} played · ` + (
+      node.querySelector('.progress-label').textContent =
+        `${fmtHours(playedHours(g))} played${g.actual_hours_source === 'manual' ? ' (manual)' : ''} · ` + (
         progress.diff >= 0 ? `${fmtHours(progress.diff)} left` : `${fmtHours(-progress.diff)} over estimate`);
     }
     if (g.extra_hours || g.completionist_hours) {
@@ -448,8 +515,13 @@
                     g.completionist_hours && `Completionist: ${fmtHours(g.completionist_hours)}`].filter(Boolean).join('\n');
     }
     const steamLink = node.querySelector('.steam-link');
-    steamLink.href = `steam://nav/games/details/${g.appid}`;
-    steamLink.setAttribute('aria-label', `Open ${g.name} in Steam`);
+    if (g.manual) {
+      // No Steam entry to open: a manually added game's AppID isn't one Steam knows.
+      steamLink.remove();
+    } else {
+      steamLink.href = `steam://nav/games/details/${g.appid}`;
+      steamLink.setAttribute('aria-label', `Open ${g.name} in Steam`);
+    }
     const hltbLink = node.querySelector('.hltb-link');
     hltbLink.href = `https://howlongtobeat.com/?q=${encodeURIComponent(g.name)}`;
     hltbLink.setAttribute('aria-label', `Open ${g.name} in HowLongToBeat`);
@@ -618,6 +690,7 @@
             g.has_thumbnail = true;
           });
         });
+        state.thumbSeen.set(appid, true);
         render();
         thumbClose();
       } catch (e) {
@@ -628,12 +701,15 @@
     }, 'image/jpeg', 0.92);
   });
 
-  // --- Edit panel: mark a game completed/hidden outside Steam, or override its completionist hours. ---
+  // --- Edit panel: mark a game completed/hidden outside Steam, or override its completionist/played hours. ---
   const editModal = {
     el: $('edit-modal'), nameEl: $('edit-modal-name'), completed: $('edit-completed'), hidden: $('edit-hidden'),
     hoursInput: $('edit-completionist-hours'), currentEl: $('edit-completionist-current'),
     searchLink: $('edit-completionist-search'),
-    errorEl: $('edit-error'), saveBtn: $('edit-save'), appid: null,
+    actualInput: $('edit-actual-hours'), actualCurrentEl: $('edit-actual-current'),
+    completedAutoEl: $('edit-completed-auto'),
+    titleRow: $('edit-title-row'), titleInput: $('edit-title'), deleteBtn: $('edit-delete'),
+    errorEl: $('edit-error'), saveBtn: $('edit-save'), appid: null, manual: false, name: '',
   };
 
   function editClose() {
@@ -643,14 +719,31 @@
 
   function editOpen(g) {
     editModal.appid = g.appid;
+    editModal.manual = !!g.manual;
+    editModal.name = g.name;
     editModal.nameEl.textContent = g.name;
-    editModal.completed.checked = !!g.completed;
+    // Only games added by hand have a title of our own to rename — scanned ones take theirs from Steam.
+    editModal.titleInput.value = g.name;
+    editModal.titleRow.classList.toggle('hidden', !g.manual);
+    editModal.deleteBtn.classList.toggle('hidden', !g.manual);
+    // Only the user's own flag is editable here: the automatic "played enough to be completed"
+    // mark must stay derived, or saving the panel would freeze it in place forever.
+    editModal.completed.checked = !!g.user_completed;
+    const autoCompleted = !!g.completed && !g.user_completed;
+    editModal.completedAutoEl.textContent = autoCompleted
+      ? `Already counted as completed: ${fmtHours(g.actual_hours ?? 0)} played covers the ${fmtHours(g.completionist_hours)} estimate.`
+      : '';
+    editModal.completedAutoEl.classList.toggle('hidden', !autoCompleted);
     editModal.hidden.checked = !!g.user_hidden;
     editModal.hoursInput.value = g.completionist_override_hours ?? '';
     const auto = g.playtime_source !== 'manual' ? g.completionist_hours : null;
     editModal.currentEl.textContent = auto != null ? `Current estimate: ${fmtHours(auto)}` : 'No completionist estimate on file.';
     const query = `What is the average completion time for ${g.name}`;
     editModal.searchLink.href = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+    editModal.actualInput.value = g.actual_override_hours ?? '';
+    editModal.actualCurrentEl.textContent = g.steam_actual_hours != null
+      ? `Tracked by Steam: ${fmtHours(g.steam_actual_hours)}`
+      : 'No play time tracked by Steam.';
     editModal.errorEl.classList.add('hidden');
     editModal.el.classList.remove('hidden');
     editModal.el.classList.add('flex');
@@ -660,22 +753,45 @@
   $('edit-cancel').addEventListener('click', editClose);
   editModal.el.addEventListener('click', editClose);
 
+  // Returns the parsed non-negative number, null when blank, or undefined when invalid.
+  function parseOptionalHours(raw) {
+    const text = raw.trim();
+    if (text === '') return null;
+    const num = Number(text);
+    return Number.isFinite(num) && num >= 0 ? num : undefined;
+  }
+
   $('edit-save').addEventListener('click', async () => {
     if (!editModal.appid) return;
-    const raw = editModal.hoursInput.value.trim();
-    let completionistHours = null;
-    if (raw !== '') {
-      const num = Number(raw);
-      if (!Number.isFinite(num) || num < 0) {
-        editModal.errorEl.textContent = 'Completionist hours must be a non-negative number.';
-        editModal.errorEl.classList.remove('hidden');
-        return;
-      }
-      completionistHours = num;
+    const completionistHours = parseOptionalHours(editModal.hoursInput.value);
+    const actualHours = parseOptionalHours(editModal.actualInput.value);
+    const invalid = completionistHours === undefined ? 'Completionist hours'
+      : actualHours === undefined ? 'Play time' : null;
+    if (invalid) {
+      editModal.errorEl.textContent = `${invalid} must be a non-negative number.`;
+      editModal.errorEl.classList.remove('hidden');
+      return;
+    }
+    const newTitle = editModal.manual ? editModal.titleInput.value.trim() : editModal.name;
+    if (editModal.manual && !newTitle) {
+      editModal.errorEl.textContent = 'Game title must not be empty.';
+      editModal.errorEl.classList.remove('hidden');
+      editModal.titleInput.focus();
+      return;
     }
     editModal.saveBtn.disabled = true;
     editModal.errorEl.classList.add('hidden');
     try {
+      if (editModal.manual && newTitle !== editModal.name) {
+        const renamed = await fetch(`/api/manual-game/${editModal.appid}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newTitle }),
+        });
+        const renameData = await renamed.json();
+        if (!renamed.ok) throw new Error(renameData.error || 'Rename failed');
+        editModal.name = renameData.name;
+      }
       const res = await fetch(`/api/game/${editModal.appid}/override`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -683,6 +799,7 @@
           hidden: editModal.hidden.checked,
           completed: editModal.completed.checked,
           completionist_hours: completionistHours,
+          actual_hours: actualHours,
         }),
       });
       const data = await res.json();
@@ -694,6 +811,26 @@
       editModal.errorEl.classList.remove('hidden');
     } finally {
       editModal.saveBtn.disabled = false;
+    }
+  });
+
+  $('edit-delete').addEventListener('click', async () => {
+    if (!editModal.appid || !editModal.manual) return;
+    if (!confirm(`Remove "${editModal.name}" from your library? Its thumbnail and saved hours are deleted too.`)) return;
+    editModal.deleteBtn.disabled = true;
+    editModal.errorEl.classList.add('hidden');
+    try {
+      const res = await fetch(`/api/manual-game/${editModal.appid}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not remove the game');
+      state.thumbSeen.delete(editModal.appid);
+      editClose();
+      await loadGames();
+    } catch (e) {
+      editModal.errorEl.textContent = e.message;
+      editModal.errorEl.classList.remove('hidden');
+    } finally {
+      editModal.deleteBtn.disabled = false;
     }
   });
 
@@ -709,8 +846,9 @@
     switch (status) {
       case 'installed': return g.installed;
       case 'uninstalled': return !g.installed;
+      case 'local': return !!g.manual;
       case 'no-playtime': return g[metric()] == null;
-      case 'no-thumbnail': return !g.has_thumbnail;
+      case 'no-thumbnail': return !hasThumbnail(g);
       default: return true;
     }
   }
@@ -758,15 +896,17 @@
       showProgress(data.status);
       updateNewGamesButton(data.status.new_games_count || 0);
       render();
-      schedulePoll(data.status.running);
+      schedulePoll(data.status);
     } catch (e) {
       $('counts').textContent = 'Could not reach the Steam Dial server.';
     }
   }
 
-  function schedulePoll(running) {
+  // Keep refreshing while the server is still looking up playtimes or downloading artwork, so the
+  // cards — and the "No thumbnail" filter — settle on final data instead of a first-glance guess.
+  function schedulePoll(status) {
     clearTimeout(state.pollTimer);
-    if (running) state.pollTimer = setTimeout(loadGames, 4000);
+    if (status.running || status.thumbnails_warming) state.pollTimer = setTimeout(loadGames, 4000);
   }
 
   function updateNewGamesButton(count) {
@@ -901,7 +1041,7 @@
     $('progress-bar').style.width = '100%';
     $('progress-count').textContent = '';
     $('progress-label').textContent = 'Scanning your library\u2026';
-    try { await fetch('/api/rescan', { method: 'POST' }); await loadGames(); }
+    try { await fetch('/api/rescan', { method: 'POST' }); state.thumbSeen.clear(); await loadGames(); }
     finally {
       $('rescan').disabled = false;
       $('rescan-icon').classList.remove('animate-spin');
@@ -912,6 +1052,62 @@
     $('scan-new-games').disabled = true;
     try { await fetch('/api/scan-new-games', { method: 'POST' }); await loadGames(); }
     finally { $('scan-new-games').disabled = false; }
+  });
+
+  // --- Add-game modal: register a local game Steam doesn't track, by title alone. ---
+  const addGameModal = {
+    el: $('add-game-modal'), nameInput: $('add-game-name'),
+    errorEl: $('add-game-error'), saveBtn: $('add-game-save'),
+  };
+
+  function addGameClose() {
+    addGameModal.el.classList.add('hidden');
+    addGameModal.el.classList.remove('flex');
+  }
+
+  function addGameOpen() {
+    addGameModal.nameInput.value = '';
+    addGameModal.errorEl.classList.add('hidden');
+    addGameModal.el.classList.remove('hidden');
+    addGameModal.el.classList.add('flex');
+    addGameModal.nameInput.focus();
+  }
+
+  async function addGameSave() {
+    const name = addGameModal.nameInput.value.trim();
+    if (!name) {
+      addGameModal.errorEl.textContent = 'Enter the game title.';
+      addGameModal.errorEl.classList.remove('hidden');
+      addGameModal.nameInput.focus();
+      return;
+    }
+    addGameModal.saveBtn.disabled = true;
+    addGameModal.errorEl.classList.add('hidden');
+    try {
+      const res = await fetch('/api/manual-game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not add the game');
+      addGameClose();
+      await loadGames();
+    } catch (e) {
+      addGameModal.errorEl.textContent = e.message;
+      addGameModal.errorEl.classList.remove('hidden');
+    } finally {
+      addGameModal.saveBtn.disabled = false;
+    }
+  }
+
+  $('add-game').addEventListener('click', addGameOpen);
+  $('add-game-modal-close').addEventListener('click', addGameClose);
+  $('add-game-cancel').addEventListener('click', addGameClose);
+  addGameModal.el.addEventListener('click', addGameClose);
+  addGameModal.saveBtn.addEventListener('click', addGameSave);
+  addGameModal.nameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addGameSave(); }
   });
 
   // --- Settings modal: edit .env values (Steam Web API key, SteamGridDB API key). ---

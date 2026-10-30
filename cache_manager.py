@@ -92,3 +92,13 @@ class GameCache:
         if entry.name != name:
             return True
         return not entry.found and (time.time() - entry.fetched_at) > retry_missing_after_s
+
+    def discard(self, appid: int) -> None:
+        """Forgets a game's cached estimate; used when it leaves the library for good."""
+        with self._lock:
+            if self._entries.pop(appid, None) is None:
+                return
+            try:
+                self._flush()
+            except OSError as exc:
+                log.error("Failed to write cache %s: %s", self.path, exc)

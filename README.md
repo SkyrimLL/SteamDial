@@ -46,6 +46,27 @@ installed/uninstalled/hidden games and want to refresh the full list — this al
 for new playtime estimates and artwork in the background (shown by the progress bar under
 the search bar).
 
+## Adding a game Steam doesn't track
+
+Games you own outside Steam (GOG, itch.io, a disc, an offline install) never show up in a
+scan. Click **Add a new game** in the header and type the title — that's all Steam Dial
+asks for. The game joins your library straight away, survives rescans and restarts, and
+gets a completionist estimate looked up from its title like any other game.
+
+From then on it behaves like a scanned game: use the card's artwork pencil to give it a
+thumbnail (nothing can be downloaded for it automatically) and the **Edit game** pencil to
+record play time, mark it completed, or hide it. Its card is badged *Added manually* and
+has no **Steam** button, since there is no Steam page to open. Added titles are stored in
+`data/manual_games.json`.
+
+For added games the **Edit game** panel also gains two things scanned games don't have:
+
+- **Game title** — fix a typo or retitle the game. Its thumbnail and saved hours stay with
+  it, and the completionist estimate is looked up again under the new title.
+- **Remove game** — delete it from your library after a confirmation, along with its
+  thumbnail, overrides and cached estimate. Scanned Steam games can't be renamed or
+  removed this way; hide them instead.
+
 ## Opening games
 
 Hover over a game card to reveal **Steam** and **HowLongToBeat** buttons over its artwork.
@@ -64,11 +85,34 @@ Saved replacements persist across sorting, filtering, recommendations, rescans, 
 They are stored in `thumbnails/overrides/` beside the script (or executable); replacing an
 image updates its URL so the browser does not reuse previously cached artwork.
 
+## Editing a game
+
+Hover over any game card and click the pencil (**Edit game**) icon on its artwork to open the
+game editor, where you can:
+
+- **Mark as completed (outside Steam)** — for games you finished but Steam doesn't know about.
+  This checkbox is only your own flag: games counted as completed automatically (because their
+  play time already covers the completionist estimate) leave it unchecked and say so underneath,
+  so lowering the play time again clears the completed mark.
+- **Hide this game** — hide a game that isn't hidden in your Steam library.
+- **Completionist hours override** — replace a wrong or missing "time to complete" estimate.
+- **Play time override (hours)** — manually record how long you've played a game whose time
+  Steam never tracked (played on another store or platform, or offline). It replaces Steam's
+  own figure everywhere play time is used: the "played" figure and progress bar on each card,
+  "time left" sorting, and the automatic "completed" mark. Cards using a manual figure show
+  it as *played (manual)*. Leave the field empty to go back to Steam's tracked play time.
+
+Your edits are stored in `data/user_overrides.json` and survive rescans and restarts.
+
 ## Sorting and filtering
 
 - **Search** — filter the library by game name.
-- **Status dropdown** — show all games, or narrow to Installed, Not installed, No playtime
-  data, or No thumbnail.
+- **Status dropdown** — show all games, or narrow to Installed, Not installed, Local games
+  (added by me), No playtime data, or No thumbnail. **Local games (added by me)** lists only
+  the titles you added yourself (see above), which makes them easy to find again in a large
+  library. **No thumbnail** lists only the games whose artwork genuinely can't
+  be found anywhere; shortly after startup it may still be settling while Steam Dial finishes
+  downloading the artwork it hasn't cached yet.
 - **Sort dropdown** — order by Name, Shortest/Longest first, Time left (shortest first), or
   Installed first.
 - **Playtime basis dropdown** — switch between Main Story, Main + Extra, and Completionist

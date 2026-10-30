@@ -43,10 +43,12 @@ class ThumbnailOverrideTests(unittest.TestCase):
         self.client = self.make_client()
 
     def make_client(self, allow_fetch=False):
+        self.warmup = Mock()
+        self.warmup.is_running.return_value = False
         return create_app(
             self.library, self.scanner, self.enrichment, TimeBudgetParser(),
-            GameRecommender(), self.thumbnails, Mock(), Mock(), Mock(),
-            self.watcher, allow_fetch=allow_fetch,
+            GameRecommender(), self.thumbnails, Mock(), Mock(), Mock(), Mock(),
+            self.watcher, self.warmup, allow_fetch=allow_fetch,
         ).test_client()
 
     def upload(self, content=OVERRIDE_IMAGE):
@@ -132,6 +134,13 @@ class ThumbnailOverrideTests(unittest.TestCase):
         self.assertTrue(self.game()["has_thumbnail"])
         self.assertIn("?v=", self.game()["thumbnail"])
         self.provider.fetch.assert_not_called()
+
+    def test_status_reports_an_in_flight_warm_up_so_has_thumbnail_can_be_retried(self):
+        for warming in (True, False):
+            with self.subTest(warming=warming):
+                self.warmup.is_running.return_value = warming
+                self.assertIs(self.client.get("/api/status").json["thumbnails_warming"], warming)
+                self.assertIs(self.client.get("/api/games").json["status"]["thumbnails_warming"], warming)
 
     def test_invalid_upload_does_not_replace_saved_override(self):
         self.upload()

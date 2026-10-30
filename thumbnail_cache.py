@@ -151,6 +151,25 @@ class ThumbnailCache:
             checked_at = self._missing.get(appid)
         return checked_at is None or (time.time() - checked_at) > retry_missing_after_s
 
+    def discard(self, appid: int) -> None:
+        """Removes everything cached for one appid: override image, downloaded image, and its
+        missing-ledger entry. Used when a game leaves the library for good.
+        """
+        paths = [self._image_path(appid)]
+        paths += [self.overrides_dir / f"{appid}{ext}" for ext in _OVERRIDE_EXTENSIONS]
+        for path in paths:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError as exc:
+                log.warning("Could not remove cached thumbnail %s: %s", path, exc)
+        with self._lock:
+            if self._missing.pop(appid, None) is None:
+                return
+            try:
+                self._flush_missing()
+            except OSError as exc:
+                log.warning("Failed to update thumbnail missing-ledger: %s", exc)
+
     def invalidate_all(self) -> None:
         """Clears our own downloaded images and the missing-ledger (not manual overrides), so
         every appid is re-fetched from the provider next time it's requested. Used by Rescan.

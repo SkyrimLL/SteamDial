@@ -23,7 +23,9 @@
 - Shows game header art, resolved in priority order: a manual override image you supply,
   Steam's own local cache, a previously downloaded copy, then a fresh download (Steam CDN,
   then optionally SteamGridDB). Downloaded art is cached locally in `thumbnails/` so it's
-  fetched at most once per game.
+  fetched at most once per game. A background warm-up resolves artwork for the whole library
+  on startup (and after a rescan) rather than waiting for each card to ask for it, which keeps
+  the **No thumbnail** filter from listing games that do in fact have artwork.
 - Lets you fix broken or missing thumbnails yourself by dropping a replacement image in
   `thumbnails/overrides/`.
 - Optional SteamGridDB fallback for games with no artwork on Steam's own CDN, enabled by
@@ -32,6 +34,11 @@
   which playtime figure (Main Story / Main + Extra / Completionist) drives sorting and
   recommendations.
 - Can run fully offline using only cached data (`--no-fetch`).
+- Lets you add local games Steam doesn't track (other stores, offline installs) by title
+  alone; they are stored in [manual_games.json](data/manual_games.json), merged into the
+  library on every scan, and edited through the same per-game panels as scanned games.
+  Added games can also be renamed (keeping their artwork and overrides) or deleted, which
+  clears everything stored under their AppID.
 
 ## Requirements
 
@@ -125,6 +132,7 @@ fetches missing playtime estimates online, caching results in `data/game_cache.j
 | `--owned-games-cache PATH` | Path to the owned-games catalog cache (default `owned_games_cache.json` in the `data/` folder) |
 | `--missing-playtime-log PATH` | Path to the missing-completionist-estimate log (default `missing_completionist.json` in the `data/` folder) |
 | `--completionist-overrides PATH` | Path to the hand-filled completionist-hours overrides (default `missing_completionist_override.json` in the `data/` folder) |
+| `--manual-games PATH` | Path to the list of hand-added local games (default `manual_games.json` in the `data/` folder) |
 | `--steamgriddb-api-key KEY` | SteamGridDB API key (default from `.env` / `STEAMGRIDDB_API_KEY` env var) |
 | `--steam-api-key KEY` | Steam Web API key, enables the owned-games catalog and real playtime (default from `.env` / `STEAM_API_KEY` env var) |
 | `--host HOST` | Host to bind the local server to (default `127.0.0.1`) |
@@ -158,11 +166,15 @@ python steamdial.py --browser
 | [enrichment.py](enrichment.py) | Background worker that fills the cache with playtime estimates |
 | [missing_playtime_log.py](missing_playtime_log.py) | Writes [missing_completionist.json](data/missing_completionist.json), listing games with no completionist playtime estimate |
 | [completionist_overrides.py](completionist_overrides.py) | Loads [missing_completionist_override.json](data/missing_completionist_override.json), a hand-filled-in copy of the missing-completionist report, to patch cache gaps |
+| [user_overrides.py](user_overrides.py) | Persists the edit panel's per-game hidden/completed/completionist-hours/play-time overrides to [user_overrides.json](data/user_overrides.json) |
+| [manual_games.py](manual_games.py) | Persists games added by hand to [manual_games.json](data/manual_games.json), assigning each an AppID above Steam's 32-bit range and never recycling one |
+| [manual_game_service.py](manual_game_service.py) | Add/rename/delete use cases for those games, keeping the loaded library in step and clearing artwork, overrides and cached estimates on deletion |
 | [playtime_providers.py](playtime_providers.py) | Playtime estimate sources (e.g. HowLongToBeat) behind a common interface |
 | [recommender.py](recommender.py) | Maps time budgets (presets or natural language) to game recommendations |
 | [thumbnail_cache.py](thumbnail_cache.py) | On-disk thumbnail cache (`thumbnails/`) plus the `overrides/` manual-fix folder |
 | [thumbnail_providers.py](thumbnail_providers.py) | Thumbnail image sources (Steam CDN, SteamGridDB) behind a common interface |
 | [thumbnail_service.py](thumbnail_service.py) | Resolves a thumbnail: override → Steam's cache → our cache → download |
+| [thumbnail_warmup.py](thumbnail_warmup.py) | Background worker that pre-downloads artwork for every game, so "has thumbnail" is accurate before any card is rendered |
 | [models.py](models.py) | Shared plain data structures (`SteamGame`, `PlaytimeEstimate`, `CacheEntry`) |
 | [templates/index.html](templates/index.html) | Front-end UI |
 

@@ -1,9 +1,10 @@
 """Discovers games in a local Steam installation.
 
 Install state (installed/not, size on disk, library path) always comes from local manifests.
-Ownership of not-installed games prefers the Steam Web API's owned-games list (see
-`owned_games_cache.py`) when available, falling back to a heuristic over leftover local
-cache files (appcache/librarycache, userdata/*/config/librarycache) otherwise.
+Ownership of not-installed games primarily comes from the Steam Web API's owned-games list
+(see `owned_games_cache.py`), merged with a heuristic over leftover local cache files
+(appcache/librarycache, userdata/*/config/librarycache) that also catches apps the API
+omits, such as demos.
 
 Strictly read-only: every file under the Steam root is opened in read mode and
 nothing is ever created, modified or deleted there.
@@ -25,7 +26,7 @@ from steam_web_api import OwnedGameRecord
 log = logging.getLogger(__name__)
 
 _STATE_FULLY_INSTALLED = 4
-_GAME_TYPES = {"game"}
+_GAME_TYPES = {"game", "demo"}
 
 
 def _read_text_vdf(path: Path) -> Optional[dict]:
@@ -93,18 +94,14 @@ class SteamLibraryScanner:
     # ---- owned-but-not-installed discovery -------------------------------------------
 
     def _owned_appid_candidates(self) -> Set[int]:
-        """Steam keeps per-app artwork / library data for apps in the user's library."""
-        candidates: Set[int] = set()
+        """Steam downloads per-app artwork into appcache/librarycache only for apps actually
+        in the user's library. (The lighter per-user `config/librarycache/*.json` metadata
+        files are not used here: Steam also writes those just from the client referencing an
+        app - e.g. a demo's store page linking its parent game - without the user owning it,
+        which produces false positives.)
+        """
         cache_dir = self.steam_root / "appcache" / "librarycache"
-        candidates |= self._numeric_names(cache_dir.iterdir() if cache_dir.is_dir() else [], dirs=True)
-
-        userdata = self.steam_root / "userdata"
-        if userdata.is_dir():
-            for user in userdata.iterdir():
-                user_cache = user / "config" / "librarycache"
-                if user_cache.is_dir():
-                    candidates |= self._numeric_names(user_cache.glob("*.json"), dirs=False)
-        return candidates
+        return self._numeric_names(cache_dir.iterdir() if cache_dir.is_dir() else [], dirs=True)
 
     @staticmethod
     def _numeric_names(entries: Iterable[Path], dirs: bool) -> Set[int]:
@@ -177,20 +174,19 @@ class SteamLibraryScanner:
         }
 
         owned = self._owned_games() if self._owned_games is not None else {}
-        if owned:
-            # Steam Web API's owned-games list is the authoritative ownership source.
-            for appid, record in owned.items():
-                if appid in games:
-                    continue
-                games[appid] = SteamGame(appid=appid, name=record.name or f"App {appid}", installed=False)
-        else:
-            # No API key/profile configured (or nothing cached yet): fall back to inferring
-            # ownership from leftover local cache files.
-            for appid in self._owned_appid_candidates():
-                info = appinfo.get(appid)
-                if appid in games or info is None or info.app_type not in _GAME_TYPES:
-                    continue
-                games[appid] = SteamGame(appid=appid, name=info.name, installed=False)
+        # Steam Web API's owned-games list is the authoritative ownership source...
+        for appid, record in owned.items():
+            if appid in games:
+                continue
+            games[appid] = SteamGame(appid=appid, name=record.name or f"App {appid}", installed=False)
+        # ...but it omits demos and similar apps that aren't a traditional owned license, so
+        # always also merge in anything inferred from leftover local cache files, regardless
+        # of whether the API itself returned data.
+        for appid in self._owned_appid_candidates():
+            info = appinfo.get(appid)
+            if appid in games or info is None or info.app_type not in _GAME_TYPES:
+                continue
+            games[appid] = SteamGame(appid=appid, name=info.name, installed=False)
         hidden = self._hidden_appids()
         games = {appid: (replace(g, hidden=True) if appid in hidden else g) for appid, g in games.items()}
 

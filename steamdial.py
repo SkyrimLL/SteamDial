@@ -21,6 +21,8 @@ from actual_playtime_service import ActualPlaytimeService
 from completionist_overrides import CompletionistOverrides
 from enrichment import PlaytimeEnrichmentService
 from library_service import LibraryService
+from manual_game_service import ManualGameService
+from manual_games import ManualGamesStore
 from missing_playtime_log import MissingPlaytimeLogger
 from new_games_watcher import NewGamesWatcher
 from owned_games_cache import OwnedGamesCache
@@ -31,6 +33,7 @@ from steam_web_api import SteamWebApiClient, resolve_steam_id64
 from thumbnail_cache import ThumbnailCache
 from thumbnail_providers import default_provider as default_thumbnail_provider
 from thumbnail_service import ThumbnailService
+from thumbnail_warmup import ThumbnailWarmupService
 from user_overrides import UserOverrides
 
 # Bundled, read-only assets (templates/static/icon): inside the PyInstaller bundle when frozen.
@@ -48,6 +51,7 @@ DEFAULT_MISSING_PLAYTIME_LOG = DATA_DIR / "missing_completionist.json"
 DEFAULT_COMPLETIONIST_OVERRIDES = DATA_DIR / "missing_completionist_override.json"
 DEFAULT_OWNED_GAMES_CACHE = DATA_DIR / "owned_games_cache.json"
 DEFAULT_USER_OVERRIDES = DATA_DIR / "user_overrides.json"
+DEFAULT_MANUAL_GAMES = DATA_DIR / "manual_games.json"
 
 log = logging.getLogger("steamdial")
 
@@ -62,7 +66,9 @@ def create_app(
     missing_playtime_log: MissingPlaytimeLogger,
     actual_playtime: ActualPlaytimeService,
     user_overrides: UserOverrides,
+    manual_games: ManualGameService,
     new_games_watcher: NewGamesWatcher,
+    thumbnail_warmup: ThumbnailWarmupService,
     allow_fetch: bool = True,
 ) -> Flask:
     app = Flask(
@@ -90,18 +96,21 @@ def create_app(
             game["thumbnail"] = thumbnail_url(game["appid"], path)
         return games
 
+    def current_status() -> dict:
+        status = enrichment.status()
+        status["new_games_count"] = new_games_watcher.status()["count"]
+        # Until the warm-up finishes, `has_thumbnail` below can still understate what's available.
+        status["thumbnails_warming"] = thumbnail_warmup.is_running()
+        return status
+
     @app.get("/api/games")
     def api_games():
         games = add_thumbnail_info(library.game_dicts())
-        status = enrichment.status()
-        status["new_games_count"] = new_games_watcher.status()["count"]
-        return jsonify(games=games, status=status)
+        return jsonify(games=games, status=current_status())
 
     @app.get("/api/status")
     def api_status():
-        status = enrichment.status()
-        status["new_games_count"] = new_games_watcher.status()["count"]
-        return jsonify(status)
+        return jsonify(current_status())
 
     @app.get("/api/settings")
     def api_settings_get():
@@ -133,13 +142,14 @@ def create_app(
         thumbnails.invalidate_cache()
         if allow_fetch:
             enrichment.start(games, force=True)
+            thumbnail_warmup.start(g.appid for g in games if not g.manual)
         missing_playtime_log.refresh_async(games)
         new_games_watcher.clear()
         if allow_fetch:
             # The rescan above used the previously-cached owned-games list; refresh it and flag
             # anything newly owned via the "Scan new games" button.
             new_games_watcher.check_async()
-        return jsonify(count=len(games), status=enrichment.status())
+        return jsonify(count=len(games), status=current_status())
 
     @app.post("/api/scan-new-games")
     def api_scan_new_games():
@@ -148,8 +158,64 @@ def create_app(
         new_games_watcher.clear()
         if allow_fetch:
             enrichment.start(library.games)
+            thumbnail_warmup.start(g.appid for g in added)
         missing_playtime_log.refresh_async(library.games)
-        return jsonify(count=len(added), status=enrichment.status())
+        return jsonify(count=len(added), status=current_status())
+
+    def _after_manual_game_change() -> None:
+        """Re-runs the playtime lookup and missing-estimate report over the updated library."""
+        if allow_fetch:
+            enrichment.start(library.games)
+        missing_playtime_log.refresh_async(library.games)
+
+    @app.post("/api/manual-game")
+    def api_add_manual_game():
+        """Adds a local game Steam doesn't track. Only the title is collected here; artwork,
+        play time and the rest stay with the edit panels the game's card already offers.
+        """
+        data = request.get_json(silent=True) or {}
+        try:
+            game = manual_games.add(str(data.get("name", "")))
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        except OSError:
+            log.exception("Failed to save manually added game")
+            return jsonify(error="Could not save the game. Check available disk space and folder permissions."), 500
+        # Its synthetic AppID means nothing to the artwork providers, so no thumbnail warm-up:
+        # the playtime lookup still works, since it matches on title.
+        _after_manual_game_change()
+        return jsonify(ok=True, appid=game.appid, name=game.name, status=current_status())
+
+    @app.patch("/api/manual-game/<int:appid>")
+    def api_rename_manual_game(appid: int):
+        """Retitles an added game; its AppID stays, so artwork and overrides follow it."""
+        data = request.get_json(silent=True) or {}
+        try:
+            game = manual_games.rename(appid, str(data.get("name", "")))
+        except KeyError:
+            return jsonify(error="Only games you added yourself can be renamed"), 404
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        except OSError:
+            log.exception("Failed to rename manually added game %s", appid)
+            return jsonify(error="Could not save the new title. Check available disk space and folder permissions."), 500
+        # The new title is a different game as far as the playtime cache is concerned, so the
+        # refresh below re-runs the lookup for it.
+        _after_manual_game_change()
+        return jsonify(ok=True, appid=game.appid, name=game.name, status=current_status())
+
+    @app.delete("/api/manual-game/<int:appid>")
+    def api_delete_manual_game(appid: int):
+        """Deletes an added game, along with the artwork, overrides and estimate stored for it."""
+        try:
+            game = manual_games.remove(appid)
+        except KeyError:
+            return jsonify(error="Only games you added yourself can be deleted"), 404
+        except OSError:
+            log.exception("Failed to delete manually added game %s", appid)
+            return jsonify(error="Could not delete the game. Check available disk space and folder permissions."), 500
+        _after_manual_game_change()
+        return jsonify(ok=True, appid=game.appid, name=game.name, status=current_status())
 
     @app.get("/api/recommend")
     def api_recommend():
@@ -217,19 +283,29 @@ def create_app(
         data = request.get_json(silent=True) or {}
         hidden = bool(data.get("hidden", False))
         completed = bool(data.get("completed", False))
-        raw_hours = data.get("completionist_hours")
-        completionist_hours = None
-        if raw_hours not in (None, ""):
-            try:
-                completionist_hours = float(raw_hours)
-            except (TypeError, ValueError):
-                return jsonify(error="completionist_hours must be a number"), 400
-            if completionist_hours < 0:
-                return jsonify(error="completionist_hours must not be negative"), 400
-        user_overrides.set(appid, hidden=hidden, completed=completed, completionist_hours=completionist_hours)
+        try:
+            completionist_hours = _parse_optional_hours(data.get("completionist_hours"), "completionist_hours")
+            actual_hours = _parse_optional_hours(data.get("actual_hours"), "actual_hours")
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        user_overrides.set(appid, hidden=hidden, completed=completed,
+                           completionist_hours=completionist_hours, actual_hours=actual_hours)
         return jsonify(ok=True)
 
     return app
+
+
+def _parse_optional_hours(raw, field: str) -> float | None:
+    """Reads an optional non-negative hours value; empty/missing means "no override"."""
+    if raw in (None, ""):
+        return None
+    try:
+        hours = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field} must be a number")
+    if hours < 0:
+        raise ValueError(f"{field} must not be negative")
+    return hours
 
 
 def main() -> None:
@@ -245,6 +321,8 @@ def main() -> None:
                       help="JSON file caching the account's owned-games list from the Steam Web API")
     cli.add_argument("--user-overrides", default=str(DEFAULT_USER_OVERRIDES),
                       help="JSON file with per-game hidden/completed/completionist_hours overrides set via the edit panel")
+    cli.add_argument("--manual-games", default=str(DEFAULT_MANUAL_GAMES),
+                      help="JSON file listing local games added by hand that Steam doesn't track")
     cli.add_argument("--steamgriddb-api-key", default=os.environ.get("STEAMGRIDDB_API_KEY"),
                       help="Optional SteamGridDB API key, used as a fallback thumbnail source")
     cli.add_argument("--steam-api-key", default=os.environ.get("STEAM_API_KEY"),
@@ -271,9 +349,11 @@ def main() -> None:
 
     completionist_overrides = CompletionistOverrides(Path(args.completionist_overrides))
     user_overrides = UserOverrides(Path(args.user_overrides))
+    manual_games_store = ManualGamesStore(Path(args.manual_games))
 
     scanner = SteamLibraryScanner(steam_root, owned_games=owned_games_cache.snapshot)
-    library = LibraryService(scanner, cache, actual_playtime, completionist_overrides, user_overrides)
+    library = LibraryService(scanner, cache, actual_playtime, completionist_overrides, user_overrides,
+                             manual_games_store)
     missing_playtime_log = MissingPlaytimeLogger(cache, Path(args.missing_playtime_log), completionist_overrides)
     enrichment = PlaytimeEnrichmentService(
         cache, default_provider(), on_run_complete=lambda: missing_playtime_log.refresh_async(library.games),
@@ -283,19 +363,27 @@ def main() -> None:
         scanner, thumbnail_cache,
         default_thumbnail_provider(steamgriddb_api_key=args.steamgriddb_api_key, actual_playtime=actual_playtime),
     )
+    # Deleting an added game must leave nothing behind under its AppID.
+    manual_games = ManualGameService(manual_games_store, library, (user_overrides, thumbnails, cache))
 
     games = library.rescan()
     if not args.no_fetch:
         enrichment.start(games)
     missing_playtime_log.refresh_async(games)
 
+    # Downloads any artwork not cached yet, so the library's "no thumbnail" state is accurate
+    # instead of just reflecting whichever cards happened to be rendered already.
+    thumbnail_warmup = ThumbnailWarmupService(thumbnails)
+    if not args.no_fetch:
+        thumbnail_warmup.start(g.appid for g in games if not g.manual)
+
     # Its first check (run immediately on start) also refreshes the owned-games list from the Steam Web API.
     new_games_watcher = NewGamesWatcher(library, scanner, owned_games_cache if not args.no_fetch else None)
     new_games_watcher.start()
 
     app = create_app(library, scanner, enrichment, TimeBudgetParser(), GameRecommender(), thumbnails,
-                     missing_playtime_log, actual_playtime, user_overrides,
-                     new_games_watcher, allow_fetch=not args.no_fetch)
+                     missing_playtime_log, actual_playtime, user_overrides, manual_games,
+                     new_games_watcher, thumbnail_warmup, allow_fetch=not args.no_fetch)
 
     if args.browser:
         log.info("Steam Dial running at http://%s:%d", args.host, args.port)

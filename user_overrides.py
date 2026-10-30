@@ -1,8 +1,9 @@
 """Thread-safe JSON store for per-game overrides entered by the user via the edit panel.
 
 Unlike `CompletionistOverrides` (read-only, hand-edited from the missing-playtime report),
-this store is written by the app itself: marking a game hidden/completed outside Steam, or
-manually correcting a wrong completionist-hours estimate, all go through `UserOverrides.set()`.
+this store is written by the app itself: marking a game hidden/completed outside Steam,
+manually correcting a wrong completionist-hours estimate, or recording play time Steam never
+tracked (played on another store/platform, or offline), all go through `UserOverrides.set()`.
 """
 from __future__ import annotations
 
@@ -25,9 +26,11 @@ class GameOverride:
     hidden: bool = False
     completed: bool = False
     completionist_hours: Optional[float] = None
+    actual_hours: Optional[float] = None
 
     def is_empty(self) -> bool:
-        return not self.hidden and not self.completed and self.completionist_hours is None
+        return (not self.hidden and not self.completed
+                and self.completionist_hours is None and self.actual_hours is None)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -38,6 +41,7 @@ class GameOverride:
             hidden=bool(data.get("hidden", False)),
             completed=bool(data.get("completed", False)),
             completionist_hours=data.get("completionist_hours"),
+            actual_hours=data.get("actual_hours"),
         )
 
 
@@ -91,9 +95,11 @@ class UserOverrides:
         with self._lock:
             return dict(self._entries)
 
-    def set(self, appid: int, hidden: bool, completed: bool, completionist_hours: Optional[float]) -> GameOverride:
+    def set(self, appid: int, hidden: bool, completed: bool, completionist_hours: Optional[float],
+            actual_hours: Optional[float] = None) -> GameOverride:
         """Replaces the override for `appid`, removing the entry entirely once it's back to defaults."""
-        override = GameOverride(hidden=hidden, completed=completed, completionist_hours=completionist_hours)
+        override = GameOverride(hidden=hidden, completed=completed,
+                                completionist_hours=completionist_hours, actual_hours=actual_hours)
         with self._lock:
             if override.is_empty():
                 self._entries.pop(appid, None)
@@ -104,3 +110,13 @@ class UserOverrides:
             except OSError as exc:
                 log.error("Failed to write user overrides %s: %s", self.path, exc)
         return override
+
+    def discard(self, appid: int) -> None:
+        """Drops every override for a game; used when it leaves the library for good."""
+        with self._lock:
+            if self._entries.pop(appid, None) is None:
+                return
+            try:
+                self._flush()
+            except OSError as exc:
+                log.error("Failed to write user overrides %s: %s", self.path, exc)

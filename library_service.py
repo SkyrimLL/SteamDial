@@ -7,6 +7,7 @@ from typing import List, Optional
 from actual_playtime_service import ActualPlaytimeService
 from cache_manager import GameCache
 from completionist_overrides import CompletionistOverrides
+from manual_games import ManualGamesSource
 from models import SteamGame
 from steam_parser import SteamLibraryScanner
 from user_overrides import GameOverride, UserOverrides
@@ -18,17 +19,21 @@ class LibraryService:
     def __init__(self, scanner: SteamLibraryScanner, cache: GameCache,
                  actual_playtime: Optional[ActualPlaytimeService] = None,
                  completionist_overrides: Optional[CompletionistOverrides] = None,
-                 user_overrides: Optional[UserOverrides] = None):
+                 user_overrides: Optional[UserOverrides] = None,
+                 manual_games: Optional[ManualGamesSource] = None):
         self._scanner = scanner
         self._cache = cache
         self._actual_playtime = actual_playtime
         self._overrides = completionist_overrides
         self._user_overrides = user_overrides
+        self._manual_games = manual_games
         self._games: List[SteamGame] = []
         self._lock = threading.Lock()
 
     def rescan(self) -> List[SteamGame]:
-        games = self._scanner.scan()
+        """Re-reads the Steam installation, keeping manually added games in the library."""
+        manual = self._manual_games.games() if self._manual_games is not None else []
+        games = sorted(self._scanner.scan() + manual, key=lambda g: g.name.lower())
         with self._lock:
             self._games = games
         return games
@@ -40,6 +45,24 @@ class LibraryService:
             added = [g for g in new_games if g.appid not in known]
             self._games = sorted(self._games + added, key=lambda g: g.name.lower())
             return added
+
+    def replace_game(self, game: SteamGame) -> bool:
+        """Swaps the loaded entry for `game.appid` (e.g. after a manual game was renamed)."""
+        with self._lock:
+            remaining = [g for g in self._games if g.appid != game.appid]
+            if len(remaining) == len(self._games):
+                return False
+            self._games = sorted(remaining + [game], key=lambda g: g.name.lower())
+            return True
+
+    def remove_game(self, appid: int) -> bool:
+        """Drops a game from the loaded library (e.g. a deleted manual game)."""
+        with self._lock:
+            remaining = [g for g in self._games if g.appid != appid]
+            if len(remaining) == len(self._games):
+                return False
+            self._games = remaining
+            return True
 
     @property
     def games(self) -> List[SteamGame]:
@@ -67,16 +90,24 @@ class LibraryService:
                 completionist_hours = user_override.completionist_hours
                 playtime_source = "manual"
                 found = True
-            actual_hours = round(actual.playtime_forever_minutes / 60, 1) if actual else None
+            steam_hours = round(actual.playtime_forever_minutes / 60, 1) if actual else None
+            actual_hours = steam_hours
+            actual_source = "steam" if actual_hours is not None else None
+            # Games Steam never tracked (other stores, offline play) only have the manual figure.
+            if user_override.actual_hours is not None:
+                actual_hours = user_override.actual_hours
+                actual_source = "manual"
             # Playtime meeting/exceeding the completionist estimate counts as completed unless the user says otherwise.
             auto_completed = actual_hours is not None and completionist_hours is not None and actual_hours >= completionist_hours
             result.append({
                 "appid": game.appid,
                 "name": game.name,
                 "installed": game.installed,
+                "manual": game.manual,
                 "hidden": game.hidden or user_override.hidden,
                 "user_hidden": user_override.hidden,
                 "completed": user_override.completed or auto_completed,
+                "user_completed": user_override.completed,
                 "size_on_disk": game.size_on_disk,
                 "thumbnail": f"/thumb/{game.appid}",
                 "main_hours": est.main_hours if est else None,
@@ -86,5 +117,8 @@ class LibraryService:
                 "playtime_source": playtime_source,
                 "playtime_status": "found" if found else ("not_found" if entry else "pending"),
                 "actual_hours": actual_hours,
+                "actual_override_hours": user_override.actual_hours,
+                "steam_actual_hours": steam_hours,
+                "actual_hours_source": actual_source,
             })
         return result

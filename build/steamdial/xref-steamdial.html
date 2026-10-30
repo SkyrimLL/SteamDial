@@ -293,6 +293,8 @@ imports:
  &#8226;   <a href="#linecache">linecache</a>
  &#8226;   <a href="#locale">locale</a>
  &#8226;   <a href="#logging">logging</a>
+ &#8226;   <a href="#manual_game_service">manual_game_service</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
  &#8226;   <a href="#math">math</a>
  &#8226;   <a href="#missing_playtime_log">missing_playtime_log</a>
  &#8226;   <a href="#new_games_watcher">new_games_watcher</a>
@@ -328,6 +330,7 @@ imports:
  &#8226;   <a href="#thumbnail_cache">thumbnail_cache</a>
  &#8226;   <a href="#thumbnail_providers">thumbnail_providers</a>
  &#8226;   <a href="#thumbnail_service">thumbnail_service</a>
+ &#8226;   <a href="#thumbnail_warmup">thumbnail_warmup</a>
  &#8226;   <a href="#traceback">traceback</a>
  &#8226;   <a href="#types">types</a>
  &#8226;   <a href="#user_overrides">user_overrides</a>
@@ -7978,6 +7981,8 @@ imported by:
  &#8226;   <a href="#jupyter_core.utils">jupyter_core.utils</a>
  &#8226;   <a href="#jupyter_core.version">jupyter_core.version</a>
  &#8226;   <a href="#library_service">library_service</a>
+ &#8226;   <a href="#manual_game_service">manual_game_service</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
  &#8226;   <a href="#markupsafe">markupsafe</a>
  &#8226;   <a href="#missing_playtime_log">missing_playtime_log</a>
  &#8226;   <a href="#models">models</a>
@@ -8227,6 +8232,7 @@ imported by:
  &#8226;   <a href="#thumbnail_cache">thumbnail_cache</a>
  &#8226;   <a href="#thumbnail_providers">thumbnail_providers</a>
  &#8226;   <a href="#thumbnail_service">thumbnail_service</a>
+ &#8226;   <a href="#thumbnail_warmup">thumbnail_warmup</a>
  &#8226;   <a href="#tomllib._parser">tomllib._parser</a>
  &#8226;   <a href="#tomllib._re">tomllib._re</a>
  &#8226;   <a href="#traitlets">traitlets</a>
@@ -17905,6 +17911,7 @@ imported by:
  &#8226;   <a href="#jupyter_client.manager">jupyter_client.manager</a>
  &#8226;   <a href="#numpy.testing._private.utils">numpy.testing._private.utils</a>
  &#8226;   <a href="#setuptools._distutils.command.build_ext">setuptools._distutils.command.build_ext</a>
+ &#8226;   <a href="#thumbnail_warmup">thumbnail_warmup</a>
  &#8226;   <a href="#tornado.concurrent">tornado.concurrent</a>
  &#8226;   <a href="#tornado.gen">tornado.gen</a>
  &#8226;   <a href="#tornado.ioloop">tornado.ioloop</a>
@@ -32971,6 +32978,7 @@ imported by:
  &#8226;   <a href="#jupyter_client.multikernelmanager">jupyter_client.multikernelmanager</a>
  &#8226;   <a href="#jupyter_client.session">jupyter_client.session</a>
  &#8226;   <a href="#logging.config">logging.config</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
  &#8226;   <a href="#missing_playtime_log">missing_playtime_log</a>
  &#8226;   <a href="#multiprocessing.resource_tracker">multiprocessing.resource_tracker</a>
  &#8226;   <a href="#numpy.__config__">numpy.__config__</a>
@@ -34030,6 +34038,7 @@ imports:
  &#8226;   <a href="#actual_playtime_service">actual_playtime_service</a>
  &#8226;   <a href="#cache_manager">cache_manager</a>
  &#8226;   <a href="#completionist_overrides">completionist_overrides</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
  &#8226;   <a href="#models">models</a>
  &#8226;   <a href="#steam_parser">steam_parser</a>
  &#8226;   <a href="#threading">threading</a>
@@ -34039,7 +34048,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#new_games_watcher">new_games_watcher</a>
+    <a href="#manual_game_service">manual_game_service</a>
+ &#8226;   <a href="#new_games_watcher">new_games_watcher</a>
  &#8226;   <a href="#steamdial.py">steamdial.py</a>
 
   </div>
@@ -34191,6 +34201,8 @@ imported by:
  &#8226;   <a href="#jupyter_client.ssh.forward">jupyter_client.ssh.forward</a>
  &#8226;   <a href="#logging.config">logging.config</a>
  &#8226;   <a href="#logging.handlers">logging.handlers</a>
+ &#8226;   <a href="#manual_game_service">manual_game_service</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
  &#8226;   <a href="#missing_playtime_log">missing_playtime_log</a>
  &#8226;   <a href="#multiprocessing.util">multiprocessing.util</a>
  &#8226;   <a href="#new_games_watcher">new_games_watcher</a>
@@ -34220,6 +34232,7 @@ imported by:
  &#8226;   <a href="#thumbnail_cache">thumbnail_cache</a>
  &#8226;   <a href="#thumbnail_providers">thumbnail_providers</a>
  &#8226;   <a href="#thumbnail_service">thumbnail_service</a>
+ &#8226;   <a href="#thumbnail_warmup">thumbnail_warmup</a>
  &#8226;   <a href="#tornado.http1connection">tornado.http1connection</a>
  &#8226;   <a href="#tornado.log">tornado.log</a>
  &#8226;   <a href="#traitlets.config.application">traitlets.config.application</a>
@@ -34370,6 +34383,53 @@ imported by:
 <span class="moduletype">MissingModule</span>  <div class="import">
 imported by:
     <a href="#bottle">bottle</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="manual_game_service"></a>
+  <a target="code" href="///G:/Games-data/CustomMods/Tools/SteamDial/manual_game_service.py" type="text/plain"><tt>manual_game_service</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#library_service">library_service</a>
+ &#8226;   <a href="#logging">logging</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
+ &#8226;   <a href="#models">models</a>
+ &#8226;   <a href="#typing">typing</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#steamdial.py">steamdial.py</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="manual_games"></a>
+  <a target="code" href="///G:/Games-data/CustomMods/Tools/SteamDial/manual_games.py" type="text/plain"><tt>manual_games</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#json">json</a>
+ &#8226;   <a href="#logging">logging</a>
+ &#8226;   <a href="#models">models</a>
+ &#8226;   <a href="#os">os</a>
+ &#8226;   <a href="#pathlib">pathlib</a>
+ &#8226;   <a href="#tempfile">tempfile</a>
+ &#8226;   <a href="#threading">threading</a>
+ &#8226;   <a href="#typing">typing</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#library_service">library_service</a>
+ &#8226;   <a href="#manual_game_service">manual_game_service</a>
+ &#8226;   <a href="#steamdial.py">steamdial.py</a>
 
   </div>
 
@@ -34702,6 +34762,8 @@ imported by:
     <a href="#cache_manager">cache_manager</a>
  &#8226;   <a href="#enrichment">enrichment</a>
  &#8226;   <a href="#library_service">library_service</a>
+ &#8226;   <a href="#manual_game_service">manual_game_service</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
  &#8226;   <a href="#missing_playtime_log">missing_playtime_log</a>
  &#8226;   <a href="#new_games_watcher">new_games_watcher</a>
  &#8226;   <a href="#playtime_providers">playtime_providers</a>
@@ -42984,6 +43046,7 @@ imported by:
  &#8226;   <a href="#logging.config">logging.config</a>
  &#8226;   <a href="#logging.handlers">logging.handlers</a>
  &#8226;   <a href="#lzma">lzma</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
  &#8226;   <a href="#mimetypes">mimetypes</a>
  &#8226;   <a href="#missing_playtime_log">missing_playtime_log</a>
  &#8226;   <a href="#multidict._compat">multidict._compat</a>
@@ -44374,6 +44437,7 @@ imported by:
  &#8226;   <a href="#jupyter_client.provisioning.local_provisioner">jupyter_client.provisioning.local_provisioner</a>
  &#8226;   <a href="#jupyter_core.paths">jupyter_core.paths</a>
  &#8226;   <a href="#jupyter_core.utils">jupyter_core.utils</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
  &#8226;   <a href="#missing_playtime_log">missing_playtime_log</a>
  &#8226;   <a href="#multidict">multidict</a>
  &#8226;   <a href="#numpy">numpy</a>
@@ -44410,6 +44474,7 @@ imported by:
  &#8226;   <a href="#steamdial.py">steamdial.py</a>
  &#8226;   <a href="#thumbnail_cache">thumbnail_cache</a>
  &#8226;   <a href="#thumbnail_service">thumbnail_service</a>
+ &#8226;   <a href="#thumbnail_warmup">thumbnail_warmup</a>
  &#8226;   <a href="#traitlets.traitlets">traitlets.traitlets</a>
  &#8226;   <a href="#traitlets.utils">traitlets.utils</a>
  &#8226;   <a href="#user_overrides">user_overrides</a>
@@ -65487,6 +65552,7 @@ imported by:
  &#8226;   <a href="#jinja2.bccache">jinja2.bccache</a>
  &#8226;   <a href="#jupyter_client.connect">jupyter_client.connect</a>
  &#8226;   <a href="#jupyter_core.paths">jupyter_core.paths</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
  &#8226;   <a href="#missing_playtime_log">missing_playtime_log</a>
  &#8226;   <a href="#multiprocessing.connection">multiprocessing.connection</a>
  &#8226;   <a href="#multiprocessing.heap">multiprocessing.heap</a>
@@ -65681,6 +65747,7 @@ imported by:
  &#8226;   <a href="#logging">logging</a>
  &#8226;   <a href="#logging.config">logging.config</a>
  &#8226;   <a href="#logging.handlers">logging.handlers</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
  &#8226;   <a href="#missing_playtime_log">missing_playtime_log</a>
  &#8226;   <a href="#multidict._multidict_py">multidict._multidict_py</a>
  &#8226;   <a href="#multiprocessing.context">multiprocessing.context</a>
@@ -65720,6 +65787,7 @@ imported by:
  &#8226;   <a href="#subprocess">subprocess</a>
  &#8226;   <a href="#sysconfig">sysconfig</a>
  &#8226;   <a href="#thumbnail_cache">thumbnail_cache</a>
+ &#8226;   <a href="#thumbnail_warmup">thumbnail_warmup</a>
  &#8226;   <a href="#tornado.platform.asyncio">tornado.platform.asyncio</a>
  &#8226;   <a href="#urllib3._collections">urllib3._collections</a>
  &#8226;   <a href="#urllib3.connection">urllib3.connection</a>
@@ -65822,6 +65890,27 @@ imports:
  &#8226;   <a href="#steam_parser">steam_parser</a>
  &#8226;   <a href="#thumbnail_cache">thumbnail_cache</a>
  &#8226;   <a href="#thumbnail_providers">thumbnail_providers</a>
+ &#8226;   <a href="#typing">typing</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#steamdial.py">steamdial.py</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="thumbnail_warmup"></a>
+  <a target="code" href="///G:/Games-data/CustomMods/Tools/SteamDial/thumbnail_warmup.py" type="text/plain"><tt>thumbnail_warmup</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#concurrent.futures">concurrent.futures</a>
+ &#8226;   <a href="#logging">logging</a>
+ &#8226;   <a href="#pathlib">pathlib</a>
+ &#8226;   <a href="#threading">threading</a>
  &#8226;   <a href="#typing">typing</a>
 
   </div>
@@ -68200,6 +68289,8 @@ imported by:
  &#8226;   <a href="#jupyter_core.paths">jupyter_core.paths</a>
  &#8226;   <a href="#jupyter_core.utils">jupyter_core.utils</a>
  &#8226;   <a href="#library_service">library_service</a>
+ &#8226;   <a href="#manual_game_service">manual_game_service</a>
+ &#8226;   <a href="#manual_games">manual_games</a>
  &#8226;   <a href="#markupsafe">markupsafe</a>
  &#8226;   <a href="#missing_playtime_log">missing_playtime_log</a>
  &#8226;   <a href="#models">models</a>
@@ -68437,6 +68528,7 @@ imported by:
  &#8226;   <a href="#thumbnail_cache">thumbnail_cache</a>
  &#8226;   <a href="#thumbnail_providers">thumbnail_providers</a>
  &#8226;   <a href="#thumbnail_service">thumbnail_service</a>
+ &#8226;   <a href="#thumbnail_warmup">thumbnail_warmup</a>
  &#8226;   <a href="#tomllib._parser">tomllib._parser</a>
  &#8226;   <a href="#tomllib._re">tomllib._re</a>
  &#8226;   <a href="#tomllib._types">tomllib._types</a>

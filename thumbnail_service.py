@@ -43,6 +43,10 @@ class ThumbnailService:
         """Forces every appid to be re-fetched from the provider next time it's displayed."""
         self._cache.invalidate_all()
 
+    def discard(self, appid: int) -> None:
+        """Drops one game's artwork entirely, including a manual override."""
+        self._cache.discard(appid)
+
     def resolve(self, appid: int) -> Optional[Path]:
         found = self.local_only(appid)
         if found is not None:

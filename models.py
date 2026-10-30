@@ -7,7 +7,7 @@ from typing import Optional
 
 @dataclass(frozen=True)
 class SteamGame:
-    """A game discovered in the local Steam installation."""
+    """A game discovered in the local Steam installation, or added by hand (`manual`)."""
 
     appid: int
     name: str
@@ -15,6 +15,7 @@ class SteamGame:
     size_on_disk: int = 0
     library_path: Optional[str] = None
     hidden: bool = False
+    manual: bool = False
 
 
 @dataclass(frozen=True)
