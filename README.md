@@ -17,9 +17,29 @@ a regular browser tab, and never writes to your Steam installation.
 ## Getting started
 
 Launch Steam Dial (either `python steamdial.py` from source, or `SteamDial.exe` if you're
-using the packaged build). On first run it scans your local Steam library and opens in its
-own window, no setup required — everything below is optional, on top of that default
-experience.
+using the packaged build). On first run it finds your Steam install automatically (via the
+Windows registry and the usual install locations), scans your library and opens in its own
+window, no setup required — everything below is optional, on top of that default experience.
+
+If your Steam library can't be found, Steam Dial opens **Settings** on startup and asks for
+it. See [Pointing Steam Dial at your Steam library](#pointing-steam-dial-at-your-steam-library).
+
+## Pointing Steam Dial at your Steam library
+
+Auto-detection covers the usual setups, including Steam installed on a second drive. When it
+comes up empty (an unusual install location, a portable/offline copy of the library), open
+**Settings** with the gear icon in the top-right corner and fill in **Steam library folder**:
+
+- Enter the folder Steam is installed in — the one containing `steamapps`, e.g.
+  `C:\Program Files (x86)\Steam` or `F:\Steam`. Steam Dial checks the folder when you save
+  and tells you if there's no `steamapps` inside it.
+- **Detect** searches for a Steam installation and fills the field in for you.
+- Leave the field empty to go back to auto-detecting on every start.
+
+Hit **Save**, then restart Steam Dial for the new folder to take effect. The setting is
+stored as `STEAMDIAL_STEAM_ROOT` in the `.env` file next to Steam Dial; setting that
+environment variable yourself, or passing `--steam-root`, works just as well and takes
+priority. Steam Dial only ever reads from this folder — it never writes to your Steam install.
 
 ## Setting up API keys
 
@@ -108,9 +128,12 @@ Your edits are stored in `data/user_overrides.json` and survive rescans and rest
 
 - **Search** — filter the library by game name.
 - **Status dropdown** — show all games, or narrow to Installed, Not installed, Local games
-  (added by me), No playtime data, or No thumbnail. **Local games (added by me)** lists only
+  (added by me), No completion estimate, or No thumbnail. **Local games (added by me)** lists only
   the titles you added yourself (see above), which makes them easy to find again in a large
-  library. **No thumbnail** lists only the games whose artwork genuinely can't
+  library. **No completion estimate** lists the games with no "time to complete" figure for the
+  current playtime basis; those cards read *Estimate unknown*, which is independent of the play
+  time Steam tracked for you — that still shows underneath whenever it isn't zero. **No thumbnail**
+  lists only the games whose artwork genuinely can't
   be found anywhere; shortly after startup it may still be settling while Steam Dial finishes
   downloading the artwork it hasn't cached yet.
 - **Sort dropdown** — order by Name, Shortest/Longest first, Time left (shortest first), or

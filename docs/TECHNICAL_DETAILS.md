@@ -1,6 +1,10 @@
 
 ## Features
 
+- Finds your Steam installation on its own (Windows registry, the per-platform default
+  install paths, then a sweep of the usual "Steam lives on my games drive" locations), with a
+  **Steam library folder** setting as the manual override when detection comes up empty. The
+  Settings panel opens on startup whenever no usable library is found.
 - Scans your local Steam install for installed games (via `appinfo.vdf` and library cache
   files) — strictly read-only, nothing under the Steam root is ever modified.
 - Builds its catalog of *owned* (not just installed) games from the official Steam Web API
@@ -113,6 +117,24 @@ The result is `dist\SteamDial.exe`. On first run it creates `data\` and `thumbna
 binary, and the templates/CSS bundled inside it are read-only. Copy `.env` next to the exe if you
 want the SteamGridDB/Steam Web API keys, same as running from source.
 
+### Startup splash screen
+
+The exe shows a splash screen (`assets/android-chrome-512x512.png`) while it starts, because a
+onefile build has to unpack itself and scan the Steam library before the window can appear. It is
+declared as `Splash(...)` in [`steamdial.spec`](../steamdial.spec) and drawn by PyInstaller's
+bootloader in embedded Tcl/Tk — so it is already on screen *before* Python starts. Building it
+therefore needs a working `tkinter` (it is Windows/Linux only) and adds roughly 1–2 MB to the exe.
+
+The splash never times out: [`splash_screen.py`](../splash_screen.py) wraps the bootloader's
+injected `pyi_splash` module and is responsible for closing it. `create_splash_screen()` returns a
+no-op implementation when `pyi_splash` is absent (running from source, or a build without a
+splash), so startup code can post progress messages unconditionally. It is dismissed when the
+window fires `loaded`, before `app.run()` in `--browser` mode, and from a `finally` guard so a
+startup crash cannot strand an always-on-top splash.
+
+To change the image, point `Splash(...)` at another **PNG or GIF** (Tk `PhotoImage` reads nothing
+else) and move `text_pos` to suit its height.
+
 ## Usage
 
 ```powershell
@@ -126,7 +148,7 @@ fetches missing playtime estimates online, caching results in `data/game_cache.j
 
 | Flag | Description |
 | --- | --- |
-| `--steam-root PATH` | Steam install folder to scan (default `F:\Steam`, or `STEAMDIAL_STEAM_ROOT` env var) |
+| `--steam-root PATH` | Steam install folder to scan. When omitted, the folder is resolved from `STEAMDIAL_STEAM_ROOT` (set in `.env` via **Settings**, or in the environment), falling back to auto-detection |
 | `--cache PATH` | Path to the playtime cache JSON (default `game_cache.json` in the `data/` folder) |
 | `--thumbnail-cache PATH` | Folder for downloaded thumbnails (default `thumbnails` next to the script) |
 | `--owned-games-cache PATH` | Path to the owned-games catalog cache (default `owned_games_cache.json` in the `data/` folder) |
@@ -156,6 +178,7 @@ python steamdial.py --browser
 | --- | --- |
 | [steamdial.py](steamdial.py) | CLI entry point, Flask routes, and window/browser bootstrap |
 | [steam_parser.py](steam_parser.py) | Read-only scanner that discovers games from Steam's library/appcache files, using the owned-games catalog (when available) for not-installed games |
+| [steam_root.py](steam_root.py) | Locates and validates the Steam install folder (registry, per-platform defaults, drive sweep) and backs the **Steam library folder** setting |
 | [appinfo_reader.py](appinfo_reader.py) | Binary parser for Steam's `appcache/appinfo.vdf` (formats v27-v29) |
 | [steam_web_api.py](steam_web_api.py) | Client for the official Steam Web API (`GetOwnedGames`) — the authoritative owned-games/playtime source |
 | [owned_games_cache.py](owned_games_cache.py) | Persists the Steam Web API's owned-games catalog to [owned_games_cache.json](data/owned_games_cache.json), loaded offline at startup and refreshed on rescan |
@@ -198,4 +221,5 @@ python steamdial.py --browser
   `.webp`) there to replace a broken or missing thumbnail; it always wins over every other
   source.
 - Set `STEAMDIAL_STEAM_ROOT` as an environment variable to avoid passing `--steam-root`
-  every time.
+  every time. The **Steam library folder** setting writes the same variable to `.env`;
+  leaving it empty restores auto-detection.

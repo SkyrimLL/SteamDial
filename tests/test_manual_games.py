@@ -241,7 +241,7 @@ class ManualGameApiTests(unittest.TestCase):
         self.client = create_app(
             self.library, self.scanner, self.enrichment, TimeBudgetParser(), GameRecommender(),
             self.thumbnails, Mock(), Mock(), self.overrides, self.service, self.watcher, self.warmup,
-            allow_fetch=True,
+            Mock(), allow_fetch=True,
         ).test_client()
 
     def add(self, name):

@@ -99,7 +99,7 @@
           <option value="installed">Installed</option>
           <option value="uninstalled">Not installed</option>
           <option value="local">Local games (added by me)</option>
-          <option value="no-playtime">No playtime data</option>
+          <option value="no-playtime">No completion estimate</option>
           <option value="no-thumbnail">No thumbnail</option>
         </select>
         <select id="sort" class="px-3 py-2 rounded-lg bg-slate-900 border border-white/10">
@@ -238,7 +238,7 @@
           <span class="source text-[11px] text-slate-500"></span>
         </div>
         <div class="progress-wrap hidden mt-2">
-          <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
+          <div class="progress-track h-1.5 bg-white/5 rounded-full overflow-hidden">
             <div class="progress-bar h-full bg-emerald-500" style="width:0%"></div>
           </div>
           <div class="progress-label mt-1 text-[11px] text-slate-500"></div>
@@ -349,7 +349,22 @@
         <h3 class="font-semibold">Settings</h3>
         <button id="settings-modal-close" class="text-slate-400 hover:text-white text-xl leading-none shrink-0">&times;</button>
       </div>
+      <p id="settings-steam-root-missing" class="hidden mb-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
+        No Steam library was detected. Set the folder your Steam is installed in to see your games.
+      </p>
       <div class="space-y-4">
+        <div>
+          <label for="settings-steam-root" class="block text-sm text-slate-400 mb-1">Steam library folder</label>
+          <div class="flex gap-2">
+            <input id="settings-steam-root" type="text" autocomplete="off" spellcheck="false" placeholder="auto-detect"
+                   class="flex-1 min-w-0 px-3 py-2 rounded-lg bg-slate-950 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono text-sm">
+            <button id="settings-steam-root-detect" type="button"
+                    class="shrink-0 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm">Detect</button>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">Your Steam install folder (the one containing <span class="font-mono">steamapps</span>),
+            e.g. <span class="font-mono">C:\Program Files (x86)\Steam</span>. Leave empty to auto-detect.</p>
+          <p id="settings-steam-root-status" class="hidden text-xs mt-1"></p>
+        </div>
         <div>
           <label for="settings-steam-api-key" class="block text-sm text-slate-400 mb-1">Steam Web API key</label>
           <input id="settings-steam-api-key" type="text" autocomplete="off" placeholder="optional, enables real playtime"
@@ -421,10 +436,12 @@
     : `${h.toFixed(1).replace(/\.0$/, '')} h`;
   const metric = () => $('metric').value;
 
+  // This line reports the *estimate* for the selected basis, not how long you played — the two
+  // are independent, and a missing estimate must not read as "you never played this".
   function hoursText(g) {
     if (g.playtime_status === 'pending') return '⏳ Looking up…';
     const h = g[metric()];
-    if (h == null) return 'Playtime unknown';
+    if (h == null) return 'Estimate unknown';
     return `⏱ ${fmtHours(h)}`;
   }
 
@@ -432,6 +449,10 @@
   // are treated as never played, so their cards read "0 h played" like any other card.
   function playedHours(g) {
     return g.actual_hours ?? 0;
+  }
+
+  function playedLabel(g) {
+    return `${fmtHours(playedHours(g))} played${g.actual_hours_source === 'manual' ? ' (manual)' : ''}`;
   }
 
   function progressInfo(g) {
@@ -500,14 +521,22 @@
     node.querySelector('.hours').textContent = hoursText(g);
     if (g.playtime_source) node.querySelector('.source').textContent = g.playtime_source;
     const progress = progressInfo(g);
+    const progressWrap = node.querySelector('.progress-wrap');
     if (progress) {
-      node.querySelector('.progress-wrap').classList.remove('hidden');
+      progressWrap.classList.remove('hidden');
+      node.querySelector('.progress-track').classList.remove('hidden');
       node.querySelector('.progress-bar').style.width = `${progress.pct}%`;
       node.querySelector('.progress-bar').classList.toggle('bg-emerald-500', progress.diff >= 0);
       node.querySelector('.progress-bar').classList.toggle('bg-amber-500', progress.diff < 0);
       node.querySelector('.progress-label').textContent =
-        `${fmtHours(playedHours(g))} played${g.actual_hours_source === 'manual' ? ' (manual)' : ''} · ` + (
+        `${playedLabel(g)} · ` + (
         progress.diff >= 0 ? `${fmtHours(progress.diff)} left` : `${fmtHours(-progress.diff)} over estimate`);
+    } else if (playedHours(g) > 0) {
+      // No estimate for the selected basis means no bar to draw, but time really spent in the
+      // game still belongs on the card — otherwise a played game looks completely untracked.
+      progressWrap.classList.remove('hidden');
+      node.querySelector('.progress-track').classList.add('hidden');
+      node.querySelector('.progress-label').textContent = playedLabel(g);
     }
     if (g.extra_hours || g.completionist_hours) {
       node.title = [g.main_hours && `Main: ${fmtHours(g.main_hours)}`,
@@ -1110,9 +1139,11 @@
     if (e.key === 'Enter') { e.preventDefault(); addGameSave(); }
   });
 
-  // --- Settings modal: edit .env values (Steam Web API key, SteamGridDB API key). ---
+  // --- Settings modal: edit .env values (Steam library folder, Steam Web API key, SteamGridDB API key). ---
   const settingsModal = {
     el: $('settings-modal'), steamKey: $('settings-steam-api-key'), gridDbKey: $('settings-steamgriddb-api-key'),
+    steamRoot: $('settings-steam-root'), steamRootStatus: $('settings-steam-root-status'),
+    steamRootMissing: $('settings-steam-root-missing'), detectBtn: $('settings-steam-root-detect'),
     errorEl: $('settings-error'), savedEl: $('settings-saved'), saveBtn: $('settings-save'),
   };
 
@@ -1121,26 +1152,84 @@
     settingsModal.el.classList.remove('flex');
   }
 
-  async function settingsOpen() {
+  function toggleHidden(el, visible) { el.classList.toggle('hidden', !visible); }
+
+  function renderSteamRootStatus(data) {
+    const active = data.steam_root_active || '';
+    settingsModal.steamRoot.placeholder = active && data.steam_root_valid ? `auto-detect (using ${active})` : 'auto-detect';
+    const status = settingsModal.steamRootStatus;
+    if (data.steam_root_valid) {
+      status.textContent = `Steam library found at ${active}`;
+      status.className = 'text-xs mt-1 text-emerald-300';
+    } else {
+      status.textContent = active ? `No steamapps folder at ${active}` : 'No Steam library detected.';
+      status.className = 'text-xs mt-1 text-rose-300';
+    }
+    toggleHidden(settingsModal.steamRootMissing, !data.steam_root_valid);
+  }
+
+  function settingsApply(data) {
+    settingsModal.steamKey.value = data.steam_api_key || '';
+    settingsModal.gridDbKey.value = data.steamgriddb_api_key || '';
+    settingsModal.steamRoot.value = data.steam_root || '';
+    renderSteamRootStatus(data);
+  }
+
+  function settingsShow() {
     settingsModal.errorEl.classList.add('hidden');
     settingsModal.savedEl.classList.add('hidden');
     settingsModal.el.classList.remove('hidden');
     settingsModal.el.classList.add('flex');
+  }
+
+  async function settingsOpen(preloaded) {
+    settingsShow();
+    if (preloaded) { settingsApply(preloaded); return; }
     try {
       const res = await fetch('/api/settings');
-      const data = await res.json();
-      settingsModal.steamKey.value = data.steam_api_key || '';
-      settingsModal.gridDbKey.value = data.steamgriddb_api_key || '';
+      settingsApply(await res.json());
     } catch (e) {
       settingsModal.errorEl.textContent = "Couldn't load current settings.";
       settingsModal.errorEl.classList.remove('hidden');
     }
   }
 
-  $('settings-btn').addEventListener('click', settingsOpen);
+  // On startup, a library we can't read is worth interrupting for: nothing else in the app works without it.
+  async function promptForSteamRootIfMissing() {
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      if (!data.steam_root_valid) {
+        settingsOpen(data);
+        settingsModal.steamRoot.focus();
+      }
+    } catch (e) { /* the settings panel stays reachable from the gear icon */ }
+  }
+
+  $('settings-btn').addEventListener('click', () => settingsOpen());
   $('settings-modal-close').addEventListener('click', settingsClose);
   $('settings-cancel').addEventListener('click', settingsClose);
   settingsModal.el.addEventListener('click', settingsClose);
+
+  settingsModal.detectBtn.addEventListener('click', async () => {
+    settingsModal.detectBtn.disabled = true;
+    settingsModal.errorEl.classList.add('hidden');
+    try {
+      const res = await fetch('/api/settings/detect-steam-root');
+      const data = await res.json();
+      if (data.found) {
+        settingsModal.steamRoot.value = data.steam_root;
+      } else {
+        settingsModal.errorEl.textContent = 'No Steam installation found — enter the folder manually.';
+        settingsModal.errorEl.classList.remove('hidden');
+      }
+    } catch (e) {
+      settingsModal.errorEl.textContent = "Couldn't search for a Steam installation.";
+      settingsModal.errorEl.classList.remove('hidden');
+    } finally {
+      settingsModal.detectBtn.disabled = false;
+    }
+  });
 
   $('settings-save').addEventListener('click', async () => {
     settingsModal.saveBtn.disabled = true;
@@ -1153,6 +1242,7 @@
         body: JSON.stringify({
           steam_api_key: settingsModal.steamKey.value.trim(),
           steamgriddb_api_key: settingsModal.gridDbKey.value.trim(),
+          steam_root: settingsModal.steamRoot.value.trim(),
         }),
       });
       const data = await res.json();
@@ -1172,6 +1262,7 @@
   loadPrefs();
   loadGames();
   checkNewGames();
+  promptForSteamRootIfMissing();
   setInterval(checkNewGames, 15000);
 })();
 </script>

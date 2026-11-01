@@ -28,7 +28,9 @@ from new_games_watcher import NewGamesWatcher
 from owned_games_cache import OwnedGamesCache
 from playtime_providers import default_provider
 from recommender import PRESETS, PRESETS_BY_KEY, GameRecommender, TimeBudgetParser, TimeRange
+from splash_screen import SplashScreen, create_splash_screen
 from steam_parser import SteamLibraryScanner
+from steam_root import SteamRootSettings, resolve_steam_root
 from steam_web_api import SteamWebApiClient, resolve_steam_id64
 from thumbnail_cache import ThumbnailCache
 from thumbnail_providers import default_provider as default_thumbnail_provider
@@ -44,7 +46,8 @@ BASE_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False
 DATA_DIR = BASE_DIR / "data"
 ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
-DEFAULT_STEAM_ROOT = os.environ.get("STEAMDIAL_STEAM_ROOT", r"F:\Steam")
+# Set in .env via Settings (or in the real environment); empty means "auto-detect on startup".
+STEAM_ROOT_ENV_VAR = "STEAMDIAL_STEAM_ROOT"
 DEFAULT_CACHE = DATA_DIR / "game_cache.json"
 DEFAULT_THUMBNAIL_DIR = BASE_DIR / "thumbnails"
 DEFAULT_MISSING_PLAYTIME_LOG = DATA_DIR / "missing_completionist.json"
@@ -69,6 +72,7 @@ def create_app(
     manual_games: ManualGameService,
     new_games_watcher: NewGamesWatcher,
     thumbnail_warmup: ThumbnailWarmupService,
+    steam_root_settings: SteamRootSettings,
     allow_fetch: bool = True,
 ) -> Flask:
     app = Flask(
@@ -119,18 +123,33 @@ def create_app(
             steam_api_key=values.get("STEAM_API_KEY") or "",
             steamgriddb_api_key=values.get("STEAMGRIDDB_API_KEY") or "",
             steam_api_host="localhost",
+            # Configured value (blank = auto-detect) vs. the folder this run actually scanned.
+            steam_root=values.get(STEAM_ROOT_ENV_VAR) or "",
+            steam_root_active=str(steam_root_settings.active),
+            steam_root_valid=steam_root_settings.is_valid(),
         )
+
+    @app.get("/api/settings/detect-steam-root")
+    def api_detect_steam_root():
+        detected = steam_root_settings.detect()
+        return jsonify(steam_root=str(detected) if detected else "", found=detected is not None)
 
     @app.post("/api/settings")
     def api_settings_post():
         data = request.get_json(silent=True) or {}
         steam_api_key = str(data.get("steam_api_key", "")).strip()
         steamgriddb_api_key = str(data.get("steamgriddb_api_key", "")).strip()
+        try:
+            steam_root = steam_root_settings.validate(data.get("steam_root"))
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
         ENV_PATH.touch(exist_ok=True)
         set_key(str(ENV_PATH), "STEAM_API_KEY", steam_api_key)
         set_key(str(ENV_PATH), "STEAMGRIDDB_API_KEY", steamgriddb_api_key)
+        set_key(str(ENV_PATH), STEAM_ROOT_ENV_VAR, str(steam_root) if steam_root else "")
         os.environ["STEAM_API_KEY"] = steam_api_key
         os.environ["STEAMGRIDDB_API_KEY"] = steamgriddb_api_key
+        os.environ[STEAM_ROOT_ENV_VAR] = str(steam_root) if steam_root else ""
         return jsonify(ok=True, restart_required=True)
 
     @app.post("/api/rescan")
@@ -310,7 +329,8 @@ def _parse_optional_hours(raw, field: str) -> float | None:
 
 def main() -> None:
     cli = argparse.ArgumentParser(description="Steam Dial local library browser")
-    cli.add_argument("--steam-root", default=DEFAULT_STEAM_ROOT, help="Steam install folder (read-only)")
+    cli.add_argument("--steam-root", default=None,
+                      help="Steam install folder (read-only); auto-detected when omitted")
     cli.add_argument("--cache", default=str(DEFAULT_CACHE), help="Path of the playtime cache JSON")
     cli.add_argument("--thumbnail-cache", default=str(DEFAULT_THUMBNAIL_DIR), help="Folder for downloaded thumbnails")
     cli.add_argument("--missing-playtime-log", default=str(DEFAULT_MISSING_PLAYTIME_LOG),
@@ -336,7 +356,22 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-    steam_root = Path(args.steam_root)
+    splash = create_splash_screen()
+    try:
+        _start(args, splash)
+    finally:
+        # Safety net: a crash during startup must never leave an always-on-top splash orphaned.
+        splash.close()
+
+
+def _start(args: argparse.Namespace, splash: SplashScreen) -> None:
+    splash.update_text("Locating Steam library...")
+    steam_root = resolve_steam_root(args.steam_root or os.environ.get(STEAM_ROOT_ENV_VAR))
+    steam_root_settings = SteamRootSettings(steam_root)
+    if steam_root_settings.is_valid():
+        log.info("Using Steam library at %s", steam_root)
+    else:
+        log.warning("No Steam library found at %s - set the Steam library folder in Settings", steam_root)
     cache = GameCache(Path(args.cache), forbidden_root=steam_root)
 
     steam_id64 = resolve_steam_id64(steam_root) if args.steam_api_key else None
@@ -366,6 +401,7 @@ def main() -> None:
     # Deleting an added game must leave nothing behind under its AppID.
     manual_games = ManualGameService(manual_games_store, library, (user_overrides, thumbnails, cache))
 
+    splash.update_text("Scanning Steam library...")
     games = library.rescan()
     if not args.no_fetch:
         enrichment.start(games)
@@ -378,18 +414,22 @@ def main() -> None:
         thumbnail_warmup.start(g.appid for g in games if not g.manual)
 
     # Its first check (run immediately on start) also refreshes the owned-games list from the Steam Web API.
+    splash.update_text("Checking for new games...")
     new_games_watcher = NewGamesWatcher(library, scanner, owned_games_cache if not args.no_fetch else None)
     new_games_watcher.start()
 
     app = create_app(library, scanner, enrichment, TimeBudgetParser(), GameRecommender(), thumbnails,
                      missing_playtime_log, actual_playtime, user_overrides, manual_games,
-                     new_games_watcher, thumbnail_warmup, allow_fetch=not args.no_fetch)
+                     new_games_watcher, thumbnail_warmup, steam_root_settings, allow_fetch=not args.no_fetch)
 
+    splash.update_text("Opening Steam Dial...")
     if args.browser:
         log.info("Steam Dial running at http://%s:%d", args.host, args.port)
+        # app.run() blocks until exit, and the browser tab is out of our control, so this is the last chance.
+        splash.close()
         app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
     else:
-        _run_in_window(app, args.host, args.port)
+        _run_in_window(app, args.host, args.port, splash)
 
 
 DEFAULT_ICON = RESOURCE_DIR / "assets" / "app-icon.ico"
@@ -416,7 +456,7 @@ def _save_window_size(window) -> None:
         log.exception("Failed to save window size")
 
 
-def _run_in_window(app: Flask, host: str, port: int) -> None:
+def _run_in_window(app: Flask, host: str, port: int, splash: SplashScreen) -> None:
     """Serves Flask on a background thread and shows it in a native OS window (no browser tab/chrome)."""
     import webview
 
@@ -438,6 +478,8 @@ def _run_in_window(app: Flask, host: str, port: int) -> None:
     )
     if window is not None:
         window.events.closing += lambda: _save_window_size(window)
+        # `loaded` (DOM ready) rather than `shown`, so the splash hands over to a painted page.
+        window.events.loaded += splash.close
         if os.name == "nt":
             window.events.shown += lambda: _enable_dark_title_bar(title)
             window.events.shown += lambda: _set_window_icon(title, DEFAULT_ICON)

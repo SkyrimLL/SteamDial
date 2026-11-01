@@ -48,7 +48,7 @@ class ThumbnailOverrideTests(unittest.TestCase):
         return create_app(
             self.library, self.scanner, self.enrichment, TimeBudgetParser(),
             GameRecommender(), self.thumbnails, Mock(), Mock(), Mock(), Mock(),
-            self.watcher, self.warmup, allow_fetch=allow_fetch,
+            self.watcher, self.warmup, Mock(), allow_fetch=allow_fetch,
         ).test_client()
 
     def upload(self, content=OVERRIDE_IMAGE):
