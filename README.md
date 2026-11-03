@@ -128,9 +128,12 @@ Your edits are stored in `data/user_overrides.json` and survive rescans and rest
 
 - **Search** — filter the library by game name.
 - **Status dropdown** — show all games, or narrow to Installed, Not installed, Local games
-  (added by me), No completion estimate, or No thumbnail. **Local games (added by me)** lists only
+  (added by me), Completed games only, Hidden games only, No completion estimate, or No thumbnail.
+  **Local games (added by me)** lists only
   the titles you added yourself (see above), which makes them easy to find again in a large
-  library. **No completion estimate** lists the games with no "time to complete" figure for the
+  library. **Completed games only** and **Hidden games only** are deliberate "show me what's
+  normally out of sight" views: each lists its whole category even when *Include hidden games* is
+  unticked or *Hide completed games* is ticked. **No completion estimate** lists the games with no "time to complete" figure for the
   current playtime basis; those cards read *Estimate unknown*, which is independent of the play
   time Steam tracked for you — that still shows underneath whenever it isn't zero. **No thumbnail**
   lists only the games whose artwork genuinely can't

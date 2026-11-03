@@ -34,7 +34,9 @@
   `thumbnails/overrides/`.
 - Optional SteamGridDB fallback for games with no artwork on Steam's own CDN, enabled by
   setting an API key in `.env`.
-- Toggle to include/exclude games you've hidden in Steam's library, and a dropdown to pick
+- Toggle to include/exclude games you've hidden in Steam's library, dedicated **Completed games
+  only** / **Hidden games only** views that list those games regardless of the visibility
+  toggles, and a dropdown to pick
   which playtime figure (Main Story / Main + Extra / Completionist) drives sorting and
   recommendations.
 - Can run fully offline using only cached data (`--no-fetch`).

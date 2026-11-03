@@ -99,6 +99,8 @@
           <option value="installed">Installed</option>
           <option value="uninstalled">Not installed</option>
           <option value="local">Local games (added by me)</option>
+          <option value="completed">Completed games only</option>
+          <option value="hidden">Hidden games only</option>
           <option value="no-playtime">No completion estimate</option>
           <option value="no-thumbnail">No thumbnail</option>
         </select>
@@ -398,7 +400,7 @@
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
-  const state = { games: [], recommended: null, pollTimer: null, thumbSeen: new Map(), thumbTimer: null };
+  const state = { games: [], recommended: null, recommendedIncludedHidden: false, recRequest: 0, pollTimer: null, thumbSeen: new Map(), thumbTimer: null };
 
   // Top of the time-budget slider's scale, in hours. Bump this if the top step ("more than N
   // hours") needs to move — the slider, its labels, and the step count all derive from it.
@@ -871,11 +873,18 @@
     installed: (a, b) => (b.installed - a.installed) || a.name.localeCompare(b.name),
   };
 
+  // Views that exist to surface games the visibility toggles normally keep out of the grid; they
+  // ignore both checkboxes so the chosen category always lists in full.
+  const VISIBILITY_OVERRIDE_STATUSES = new Set(['completed', 'hidden']);
+  const hiddenAllowed = () => $('include-hidden').checked || VISIBILITY_OVERRIDE_STATUSES.has($('status').value);
+
   function statusMatches(status, g) {
     switch (status) {
       case 'installed': return g.installed;
       case 'uninstalled': return !g.installed;
       case 'local': return !!g.manual;
+      case 'completed': return !!g.completed;
+      case 'hidden': return !!g.hidden;
       case 'no-playtime': return g[metric()] == null;
       case 'no-thumbnail': return !hasThumbnail(g);
       default: return true;
@@ -885,8 +894,8 @@
   function render() {
     const q = $('search').value.trim().toLowerCase();
     const status = $('status').value;
-    const includeHidden = $('include-hidden').checked;
-    const hideCompleted = $('hide-completed').checked;
+    const includeHidden = hiddenAllowed();
+    const hideCompleted = $('hide-completed').checked && !VISIBILITY_OVERRIDE_STATUSES.has(status);
     const source = state.recommended ?? state.games;
     const sort = $('sort').value;
     let list = source.filter((g) =>
@@ -905,6 +914,13 @@
 
     const installed = state.games.filter((g) => g.installed).length;
     $('counts').textContent = `${state.games.length} games · ${installed} installed · showing ${list.length}`;
+  }
+
+  // An active recommendation is filtered server-side, so hidden games can only come back by
+  // asking for them again; a plain re-render is enough when that choice didn't change.
+  function refreshAfterVisibilityChange() {
+    if (state.recommended && state.recommendedIncludedHidden !== hiddenAllowed()) recommend(state.lastParams);
+    else render();
   }
 
   function showProgress(s) {
@@ -958,18 +974,25 @@
   async function recommend(params) {
     $('rec-error').classList.add('hidden');
     state.lastParams = params;
+    const includeHidden = hiddenAllowed();
+    // Filter changes can fire a new lookup (or clear the recommendation) while one is in flight;
+    // only the newest request may publish its result.
+    const token = ++state.recRequest;
     try {
       const res = await fetch('/api/recommend?' + new URLSearchParams({
-        ...params, metric: metric(), include_hidden: $('include-hidden').checked ? '1' : '0',
+        ...params, metric: metric(), include_hidden: includeHidden ? '1' : '0',
       }));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Request failed');
+      if (token !== state.recRequest) return;
       state.recommended = data.games;
+      state.recommendedIncludedHidden = includeHidden;
       delete $('sort').dataset.touched;
       $('rec-text').textContent = `${data.games.length} games fit “${data.range.label}” — shortest first.`;
       $('rec-banner').classList.remove('hidden');
       render();
     } catch (e) {
+      if (token !== state.recRequest) return;
       $('rec-error').textContent = e.message;
       $('rec-error').classList.remove('hidden');
     }
@@ -1041,13 +1064,14 @@
   });
   $('rec-clear').addEventListener('click', () => {
     state.recommended = null;
+    state.recRequest++;
     setActivePreset(null);
     resetBudgetSlider();
     $('rec-banner').classList.add('hidden');
     render();
   });
   $('search').addEventListener('input', render);
-  $('status').addEventListener('change', () => { savePrefs(); render(); });
+  $('status').addEventListener('change', () => { savePrefs(); refreshAfterVisibilityChange(); });
   $('sort').addEventListener('change', (e) => { e.target.dataset.touched = '1'; savePrefs(); render(); });
   $('metric').addEventListener('change', () => {
     savePrefs();
@@ -1055,7 +1079,7 @@
   });
   $('include-hidden').addEventListener('change', () => {
     savePrefs();
-    if (state.recommended) recommend(state.lastParams); else render();
+    refreshAfterVisibilityChange();
   });
   $('hide-completed').addEventListener('change', () => { savePrefs(); render(); });
   $('rescan').addEventListener('click', async () => {
