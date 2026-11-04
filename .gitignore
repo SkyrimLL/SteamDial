@@ -1,0 +1,3 @@
+.venv-build/**/*
+build/steamdial/warn-steamdial.txt
+build/steamdial/xref-steamdial.html
